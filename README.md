@@ -47,4 +47,5 @@ The configuration of the experiments is handled via the BaseOptions class, which
 | `--gpu_ids` | `str` | `'-1'` | Specifies GPU IDs. Use comma-separated values (e.g., `0,1`) for multi-GPU training. Use `-1` for CPU mode. |
 | `--checkpoints_dir`| `str` | `'./checkpoints'` | Directory where model checkpoints are saved. |
 | `--res_dir` | `str` | `'./results'` | Directory where visualization results and metrics are saved. |
+| `--K` | `int` | `'20'` | Size of coreset. |
 
