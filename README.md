@@ -1,6 +1,6 @@
 # Bilevel Manifold Fitting
 
-### Bilevel Cycle GAN for Robust Manifold Fitting
+#### Bilevel Cycle GAN for Robust Manifold Fitting
 
 This repository contains the official implementation of Bilevel Cycle Generative Adversarial Network (BCGAN), as presented in the paper "Bilevel Manifold Fitting".
 
