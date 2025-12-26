@@ -7,7 +7,7 @@ This repository contains the official implementation of Bilevel Cycle Generative
 
 ## Overview
 
-Manifold learning assumes that high-dimensional ambient data possess a low-dimensional geometric structure. However, existing methods are often vulnerable to corrupted data, particularly noisy dimensions or channels. This project proposes a bilevel probabilistic optimization strategy to address these issues.
+Manifold learning assumes that high-dimensional ambient data possess a low-dimensional geometric structure. However, existing methods are often vulnerable to corrupted data, particularly additive noise, pixel noise, noisy dimensions or channels. This project proposes a bilevel probabilistic optimization strategy to address these issues.
 
 ## Key Features
 
