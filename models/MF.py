@@ -42,9 +42,15 @@ class MF(nn.Module):
         return w
     
     def Normalize_weight(self, w):
-        return w / torch.sum(w, dim=0, keepdim=True)
+        # +eps keeps the backward pass finite when a whole weight column is
+        # zero (e.g. no reference within the r1/r2 windows for some query);
+        # a plain 0/0 produces NaN gradients that poison the radius params.
+        return w / (torch.sum(w, dim=0, keepdim=True) + 1e-12)
 
-    def forward(self, Z):
+    def forward(self, Z, mask=None):
+        """Z: (n_q, d) query points.  mask: optional binary mask on the ambient
+        dimensions; when given, the reference set X is masked consistently so
+        that FM operates on the masked (informative) subspace (BCGAN Eq.(6))."""
         if self.Is_pic == True:
             Z = Z.reshape(Z.shape[0], -1)
 
@@ -55,42 +61,61 @@ class MF(nn.Module):
         if self.r2 > self.r2_init*10:
             self.r2 = nn.Parameter(torch.tensor(self.r2_init*10), requires_grad=True)
 
+        if mask is not None:
+            m = mask.reshape(-1).to(Z.device)
+            X_ref = self.X * m.unsqueeze(0)
+        else:
+            X_ref = self.X
 
-        dist = torch.cdist(self.X, Z)
+        dist_all = torch.cdist(X_ref, Z)                    # (n_ref, n_q)
+        has_nb = torch.any(dist_all <= self.r0, dim=0)      # queries with >= 1 neighbour
+        if not bool(has_nb.any()):
+            # no query has a reference point within r0: identity fallback
+            e_Z = Z
+            if self.Is_pic:
+                e_Z = e_Z.reshape(e_Z.shape[0], *self.out_shape)
+            return e_Z
+        qinds = has_nb.nonzero(as_tuple=False).squeeze(1)   # (k,), k >= 1
+        Zs = Z[qinds]
+        dist = dist_all[:, qinds]
+        rinds = torch.any(dist <= self.r0, dim=1).nonzero(as_tuple=False).squeeze(1)
+        dist = dist[rinds]
+        X = X_ref[rinds]
 
-        inds = torch.any(dist <= self.r0, dim=1).nonzero().squeeze()
-        dist = dist[inds] 
-        X = self.X[inds] 
         alpha = self.weight1(dist, self.r0)
         alpha = self.Normalize_weight(alpha)
 
         mu = torch.matmul(alpha.t(), X)
-        flag0 = torch.isnan(mu)
-        mu[flag0] = Z[flag0] 
+        U = Zs - mu
 
-        U = Z - mu 
-        U = torch.unsqueeze(U, dim=1) 
+        # squared distance along the local tangent direction.  U is normalised
+        # so that r2 acts on true distances even when the local deviation is
+        # large (e.g. unmasked noisy dimensions); the raw (diff . U)^2 |U|^2
+        # form of the original code made dist_v sqrt(negative) = NaN whenever
+        # |U| > dist, silently collapsing FM to the identity map.
+        U_len2 = (U ** 2).sum(dim=1, keepdim=True) + 1e-12           # (k, 1)
+        diff_vectors = torch.unsqueeze(X, dim=1) - torch.unsqueeze(Zs, dim=0)  # (r, k, d)
+        dU = (diff_vectors * U.unsqueeze(0)).sum(dim=2)              # (r, k)
+        dist_u = (dU ** 2) / U_len2.t()                              # (r, k) squared
+        dist_u = torch.sqrt(dist_u + 1e-12)                          # along-tangent distance
+        dist_v = torch.clamp(dist ** 2 - dist_u ** 2, min=0).sqrt()  # off-tangent distance
 
-        diff_vectors = torch.unsqueeze(X, dim=1) - torch.unsqueeze(Z, dim=0) 
-        diff_vectors = torch.unsqueeze(diff_vectors, dim=2)
-      
-        projection = torch.matmul(diff_vectors, U.transpose(1, 2)) 
-        projection = torch.matmul(projection, U) 
-
-        dist_u = torch.matmul(projection,projection.transpose(2, 3)) 
-        dist_u = torch.squeeze(dist_u) 
-        dist_v = (dist**2 - dist_u)**0.5 
-        dist_u = dist_u**0.5 
-
-        beta = self.weight2(dist_v, self.r1) * self.weight2(dist_u, self.r2)
-        beta = self.Normalize_weight(beta)
+        w_prod = self.weight2(dist_v, self.r1) * self.weight2(dist_u, self.r2)
+        wsum = w_prod.sum(dim=0, keepdim=True)                       # (1, k)
+        beta = w_prod / (wsum + 1e-12)
 
         e_Z = torch.matmul(beta.t(), X)
-        flag0 = torch.isnan(e_Z)
-        e_Z[flag0] = Z[flag0] 
+        # queries whose neighbourhood carries no tangent/on-tangent weight
+        # (all neighbours further than r1/r2 windows) keep their input
+        degenerate = (wsum.squeeze(0) <= 1e-12) | torch.isnan(e_Z).any(dim=1)
+        e_Z[degenerate] = Zs[degenerate]
+
+        # queries without neighbours keep their input (identity), the rest get
+        # the local manifold fit; index_put keeps the autograd graph intact.
+        out = Z.clone()
+        out[qinds] = e_Z
 
         if self.Is_pic:
-            e_Z = e_Z.reshape(e_Z.shape[0], *self.out_shape)
+            out = out.reshape(out.shape[0], *self.out_shape)
 
-
-        return e_Z
+        return out

@@ -1,0 +1,4779 @@
+
+===== PAGE 1 =====
+Highlights
+Bilevel Manifold Fitting
+Xuelin Zhang, Hong Chen, Li Shen, Bin Gu, Heng Huang
+• Developing a new bilevel scheme for manifold fitting, sample genera-
+tion, and nonlinear interpolation.
+• Establishing the generalization bounds via algorithmic stability for
+stochastic bilevel minimax algorithm.
+
+===== PAGE 2 =====
+Bilevel Manifold Fitting
+Xuelin Zhanga,b, Hong Chena,b,∗, Li Shenc, Bin Gud, Heng Huange
+aEngineering Research Center of Intelligent Technology for Agriculture, Ministry of
+Education, Wuhan, China
+bCollege of Informatics, Huazhong Agricultural University, Wuhan, China
+cSchool of Cyber Science and Technology, Sun Yat-Sen University, Shenzhen, China
+dSchool of Artificial Intelligence, Jilin University, Jilin, China
+eDepartment of Computer Science, University of Maryland College Park, USA
+Abstract
+The manifold assumption states that high-dimensional ambient data pos-
+sess a low-dimensional geometric structure, which has promoted many man-
+ifold learning models achieving promising performance for wide applications.
+However, when there exists additive noise or noisy dimensions, it is chal-
+lenging to estimate the latent manifold since the noisy information tends to
+mislead the data-driven mapping from the ambient space to the latent space.
+To address this issue, we formulate a Bilevel Cycle Generative Adversar-
+ial Network (BCGAN) that comprises two generative adversarial networks
+and a specific manifold fitting module. This network can automatically as-
+sign masks to the ambient or latent data, learn robust mutual mappings,
+and generate new synthetic samples. Theoretically, we establish the upper
+bounds of generalization error for the stochastic bilevel minimax problems
+to reveal the relationship between generalization capability and parameter
+settings. Experiments on both synthetic and real-world datasets verify the
+competitiveness and robustness of the proposed approach for manifold fitting
+with corrupted data.
+Keywords:
+Manifold fitting, bilevel optimization, noisy feature, generative
+adversarial networks, learning theory
+∗Corresponding author.
+Email addresses: xlinml@163.com (Xuelin Zhang), chenh@mail.hzau.edu.cn
+(Hong Chen), mathshenli@gmail.com (Li Shen), gubin@jlu.edu.cn (Bin Gu),
+heng@umd.edu (Heng Huang)
+Preprint submitted to Elsevier
+September 23, 2026
+
+===== PAGE 3 =====
+1. Introduction
+1
+Manifold assumption supposes that high-dimensional data lying in an am-
+2
+bient space N ⊂Rd0 are essentially supported on a latent manifold M ⊂Rd
+3
+(d < d0) (Meil˘a and Zhang, 2023). To fit intrinsic mappings between the am-
+4
+bient space and its low-dimensional manifold, various approaches have been
+5
+developed to approximate the local and global geometry of a latent mani-
+6
+fold with empirical observations lying on or close to it (Fefferman et al., 2018,
+7
+2020), where deep neural networks have shown promising fitting performance,
+8
+e.g., the specific manifold network (Chakraborty et al., 2020), generative ad-
+9
+versarial networks (GANs) (Zhen et al., 2021), and variational autoencoders
+10
+(VAEs) (Miolane and Holmes, 2020). In addition to the strategy of learning
+11
+a mapping, there is another pathway that considers manifold generation for
+12
+specific scenarios (Huang et al., 2019; Miolane and Holmes, 2020). Nonethe-
+13
+less, most existing approaches are sensitive to atypical observations, such as
+14
+additive noises (Yao et al., 2023, 2024b). Their similarity metric involving
+15
+corrupted samples cannot reflect the data structure objectively and results
+16
+in a degraded approximation to the latent manifold. Hence, it is crucial to
+17
+formulate a robust fitting framework that reconstructs the intrinsic geomet-
+18
+ric structure by removing noisy information from the raw data. Following
+19
+this line, Yao et al. (2024b) developed a manifold fitting approach based on
+20
+the cycle-consistent GAN (called MFCGAN), where a specific manifold fit-
+21
+ting module is proposed for accurate projection with theoretical guarantees
+22
+(Yao et al., 2023). Although the manifold fitting module and consistency loss
+23
+benefit the alignment against additive noise, MFCGAN remains sensitive to
+24
+noisy dimensions and channels.
+25
+Despite impressive progress in manifold fitting, there is scarce work on
+26
+the impact of noisy features on robustness and generalization. Toward this
+27
+end, the following fundamental problem remains largely open:
+28
+Can we improve the robustness and generalization of manifold
+29
+fitting under complex noisy circumstances?
+30
+In this paper, we answer this question from two perspectives:
+31
+• (How) Under what strategies do new manifold learning schemes recon-
+32
+struct the intrinsic mapping between the ambient space and the latent
+33
+region in the presence of redundant and noisy features?
+34
+• (Why) What theoretical guarantees does the proposed approach exhibit
+35
+besides empirical performance gains?
+36
+2
+
+===== PAGE 4 =====
+Intuitively, we can handle the above questions using a two-stage frame-
+37
+work, i.e., selecting informative features first (e.g., wavelet transformation
+38
+(Antoine et al., 2010; Deutsch et al., 2016)), and then implementing a ro-
+39
+bust manifold fitting approach (e.g., robust GANs (Zhen et al., 2021; Yao
+40
+et al., 2024b)). However, under such a strategy, the empirical set involving
+41
+informative dimensions is fixed without considering the downstream tasks.
+42
+Naturally, it is necessary to design an iterative algorithm for automatically
+43
+updating the selected set of informative dimensions in terms of the model’s
+44
+predictive accuracy. Inspired by the masked autoencoder for image recovery
+45
+(He et al., 2022) and meta learning for coreset selection (Borsos et al., 2020;
+46
+Zhou et al., 2022; Hao et al., 2024), this paper considers assigning masks on
+47
+the ambient space, where truly informative features are left for modeling and
+48
+reconstructing the manifolds.
+49
+However, several challenges lie along this route.
+50
+• It is NP-hard to learn the discrete mask variables directly, which take
+51
+values in {0, 1}, especially for high-dimensional data.
+52
+• Most manifold fitting and bilevel optimization algorithms require a
+53
+complex optimization strategy and numerous computation steps (Huang
+54
+et al., 2019; Ji et al., 2021), which often lead to a significant computa-
+55
+tional burden.
+56
+• It is challenging to design a feasible optimization algorithm for solving
+57
+bilevel min-max problems, where the hypergradient w.r.t. the lower-
+58
+level min-max problem is complex to approximate.
+59
+1.1. Contributions
+60
+To address the aforementioned challenges, a bilevel probabilistic opti-
+61
+mization strategy equipped with projected gradient estimation (PGE) (Zhou
+62
+et al., 2022) is designed to simplify hypergradient computation and assign di-
+63
+mensional masks efficiently. We integrate the meta-learning scheme and cycle
+64
+consistency metric into the manifold-based generative adversarial framework
+65
+to formulate a new Bilevel Cycle Generative Adversarial Network (BCGAN),
+66
+which enables simultaneous realization of automatic dimensional masking,
+67
+effective synthetic data generation, and robust manifold estimation.
+68
+The core strategy is to iteratively update the informative feature set as
+69
+well as the mappings between the ambient and latent spaces, where a proba-
+70
+bilistic bilevel framework automatically learns the masks of BCGAN. In ad-
+71
+dition, the cycle consistency metric (Zhu et al., 2017) as well as the specific
+72
+3
+
+===== PAGE 5 =====
+Table 1: Properties of our BCGAN and related models (✓: enjoying the given informa-
+tion, and × : not available for the information). DE, IT, MF and CS stand for Density
+Estimation, Image Translation, Manifold Fitting and Coreset Selection, respectively.
+MADE
+DAE
+CycleGAN
+MFCGAN
+PBCS
+BCGAN (ours)
+Learning Task
+DE
+DE
+IT
+MF
+CS
+MF
+Optimization Framework
+Single-level
+Single-level
+Single-level
+Single-level
+Bilevel
+Bilevel
+New Sample Generation
+✓
+✓
+✓
+✓
+×
+✓
+Computing Acceleration
+✓
+×
+×
+✓
+✓
+✓
+Additive Noise Robustness
+✓
+×
+✓
+✓
+×
+✓
+Noisy Dimension Robustness
+×
+×
+×
+×
+✓
+✓
+Generalization Analysis
+×
+×
+×
+×
+×
+✓
+manifold fitting module (Yao et al., 2023) are introduced to achieve efficient
+73
+alignment between the latent manifold M and the estimated manifold c
+M
+74
+(or the ambient space N and the estimated space b
+N).
+75
+The main contributions of this paper are summarized below:
+76
+• Robust bilevel manifold modeling. The proposed BCGAN employs a di-
+77
+mensional masking mechanism and deep generative models to achieve
+78
+robust manifold fitting and synthetic sample generation, thereby mit-
+79
+igating the adverse effects of noisy data (e.g., label noise and noisy
+80
+dimensions).
+81
+• Theoretical guarantees on optimization and generalization.
+The de-
+82
+signed BCGAN exploits the cycle consistency metric and an efficient
+83
+policy gradient estimation with the projection operation to reduce com-
+84
+putational complexity. Notably, the former accelerates the affiliation
+85
+of the original and empirical estimated regions, while the latter avoids
+86
+the heavy computation on Hessian or Jacobian matrices. Theoretically,
+87
+we establish the generalization bounds for the proposed BCGAN.
+88
+• Empirical competitiveness on manifold learning. Experiments on syn-
+89
+thetic and real-world benchmarks verify that our BCGAN achieves
+90
+competitive performance in identifying the truly informative features,
+91
+robust manifold estimation, manifold denoising, and non-linear inter-
+92
+polation.
+93
+1.2. Review of the Related Works
+94
+Traditional Manifold Learning Approaches. Early research in manifold
+95
+learning was rooted in numerical analysis and differential geometry, focus-
+96
+ing on extracting intrinsic low-dimensional structures from high-dimensional
+97
+4
+
+===== PAGE 6 =====
+Figure 1: Toy examples on highlighting the impact of noisy features. Clean circle dataset
+includes two inputs [X1, X2], while the corrupted circle dataset includes [X1, X2, Xnoise],
+where additional noisy input Xnoise ∈N(0, 100).
+Empirical comparisons with several
+baselines (MFCGAN(Yao et al., 2024b), RoundTrip(Liu et al., 2021), MADE(Germain
+et al., 2015), MAF(Papamakarios et al., 2017), RealNVP(Dinh et al., 2017)) on clean or
+noisy scenarios are presented in the upper and lower panels, respectively. The comparisons
+demonstrate that the bilevel masking mechanism of BCGAN is effective in handling noisy
+features (Xnoise). See Section 5 for details.
+data, e.g., Principal Curves and Surfaces (Hastie and Stuetzle, 1989) and
+98
+Kernel PCA (Sch¨olkopf et al., 1998). Subsequently, ISOMAP (Tenenbaum
+99
+et al., 2000) and diffusion maps (Coifman and Lafon, 2006), were introduced
+100
+to preserve non-Euclidean structures via geodesic distances or Markovian
+101
+connectivity. To enhance robustness, further studies explored noise removal
+102
+through wavelet transformations (Antoine et al., 2010), graph-based diffusion
+103
+processes (Hein and Maier, 2006), and local approximation methods (Harris
+104
+5
+
+===== PAGE 7 =====
+et al., 2011; Wang and Carreira-Perpin´an, 2010). Papaioannou et al. (2022)
+105
+proposed a three-tier framework that combines manifold learning for embed-
+106
+ding and geometric harmonics for lifting forecasts back to the original space,
+107
+which offers computational feasibility and interpretability. Despite their the-
+108
+oretical elegance, these traditional approaches often treat all dimensions in
+109
+the ambient space as inputs for the kernel-based embedding and lifting pro-
+110
+cesses, which can be sensitive to corruptions such as additive noise, pixel
+111
+noise, and noisy dimensions or channels (Sober and Levin, 2020; Luo and
+112
+Hu, 2020).
+113
+Manifold fitting via neural networks. Manifold fitting focuses on learn-
+114
+ing the mappings between the two regions to reconstruct a smooth man-
+115
+ifold, which attempts to approximate the local and global geometry of a
+116
+latent manifold using existing observations that lie on or close to it (Fef-
+117
+ferman et al., 2018, 2020). Specifically, the target is to uncover a smooth
+118
+mapping F : N ⊂Rd0 →c
+M ⊂Rd as well as the corresponding inverse
+119
+F −1 : F(N) ⊂c
+M →N. Recently, there has been an increasing number of
+120
+studies (e.g., VAEs and GANs) dedicated to reconstructing manifolds, which
+121
+show tremendous promise in density estimation (Vincent et al., 2008; Ger-
+122
+main et al., 2015), image translation (Papamakarios et al., 2017; Zhu et al.,
+123
+2017) and manifold fitting (Yao et al., 2024b). Under the assumption that
+124
+partial destruction to inputs brings similar encoding and decoding represen-
+125
+tations, a denoising autoencoder (DAE) (Vincent et al., 2008) is developed
+126
+for robust manifold fitting against potentially noisy channels (dimensions).
+127
+Another line of concurrent work adopts the principle of masked autoencoder
+128
+to design algorithms (e.g., the masked autoencoder for distribution estima-
+129
+tion (MADE) (Germain et al., 2015) and masked autoregressive flow (MAF)
+130
+(Papamakarios et al., 2017)) for density estimation, which can be applied to
+131
+the manifold fitting tasks with slight modifications.
+132
+To ensure the property of nearly mutual mappings for image-to-image
+133
+translation, Zhu et al. (2017) developed the popular CycleGAN with cycle-
+134
+consistent loss to alleviate the previous dependence on paired images. Yao
+135
+et al. (2024b) further leverage the modified CycleGAN (MFCGAN) to ap-
+136
+proximate the near-bijective mappings between the ambient and latent re-
+137
+gions by training the two generators as the exponential map and logarithmic
+138
+map supported on the latent manifold.
+However, the implementations of
+139
+DAE, MADE and MAF heavily depend on the ambient dimension D for
+140
+point projection, which brings high computation costs. Moreover, both Cy-
+141
+6
+
+===== PAGE 8 =====
+cleGAN and MFCGAN are sensitive to noisy dimensions in raw data. Unlike
+142
+the above approaches, our formulation concerns the computational efficiency
+143
+and robustness for manifold learning with noisy dimensions.
+144
+Bilevel scheme for coreset selection. The meta-based masking policy was
+145
+introduced by Borsos et al. (2020), where a bilevel neural network was de-
+146
+signed for coreset selection. An enhanced version incorporating a probabilis-
+147
+tic optimization strategy was later developed for classification tasks involving
+148
+imperfect training data (Zhou et al., 2022; Hao et al., 2024), particularly for
+149
+scenarios with corrupted images, imbalanced categories, and label noise. In-
+150
+deed, the probabilistic bilevel coreset selection (PBCS) in (Zhou et al., 2022)
+151
+has not been applied to the manifold-valued scenarios with noisy features.
+152
+To the best of our knowledge, there has been no prior endeavor to explore
+153
+the bilevel masking policy for robust manifold fitting.
+154
+To better highlight the novelty of our BCGAN, we summarize its proper-
+155
+ties in Table 1 compared with several related state-of-the-art models, includ-
+156
+ing MADE (Germain et al., 2015)), DAE (Vincent et al., 2008), CycleGAN
+157
+(Zhu et al., 2017), MFCGAN (Yao et al., 2024b) and PBCS for feature se-
+158
+lection (Zhou et al., 2022). Moreover, a toy example of manifold fitting is
+159
+provided in Figure 1 to show the fitting performance with or without addi-
+160
+tional noisy dimensions. Table 1 and Figure 1 demonstrate that the proposed
+161
+BCGAN exhibits desirable properties, including robustness against additive
+162
+label noise and noisy dimensions, computational efficiency and theoretical
+163
+guarantees.
+164
+2. Revisiting the MFCGAN Model
+165
+2.1. Problem Setup
+166
+Our first target is to approximate the mappings between the ambient
+167
+space and latent space, while keeping their nearly bijective properties via
+168
+the MFCGAN (Zhu et al., 2017; Yao et al., 2024b). Before introducing the
+169
+basic MFCGAN, we first present some necessary assumptions and settings
+170
+throughout this paper, which have been adopted widely in manifold learning
+171
+for model construction (Zhen et al., 2021; Yao et al., 2024b) and theoretical
+172
+analysis (Mohammed and Narayanan, 2017; Fefferman et al., 2018; Sober
+173
+and Levin, 2020; Fefferman et al., 2020; Yao et al., 2023).
+174
+Basic Assumptions. Assume that there are the ambient domain X ⊆Rd0
+175
+and the latent domain Y ⊆Rd, d < d0. Under the additive noise assumption,
+176
+the observed random variable X ∈X can be divided into an unobserved
+177
+7
+
+===== PAGE 9 =====
+variable V and a noise component ϵ.
+Denote ω as the distribution of V
+178
+supported on the latent manifold M, where M is a compact d-dimensional
+179
+sub-manifold and twice-differentiable. As stated in (Zhu et al., 2017; Yao
+180
+et al., 2024b), suppose that ω satisfies the uniform distribution on M w.r.t.
+181
+d-dimensional Hausdorff measure and noise ϵ lies in the ambient space, where
+182
+ϵ is independent of V and follows the distribution
+183
+ϕσ(ϵ) =
+
+1
+2πσ2
+ d0
+2
+exp
+
+−∥ϵ∥2
+2
+2σ2
+
+.
+Consider the input set {xi}n
+i=1 in the ambient space, where xi = vi +ϵi for
+184
+i = 1, · · · , n. The sample pairs {(xi, vi, ϵi)}n
+i=1 are independent and identi-
+185
+cally distributed (i.i.d.) realizations of variable pair (X, V, ϵ). Naturally, the
+186
+distribution of X can be regarded as the convolution ρ = ω ⋆ϕσ (Yao et al.,
+187
+2023, 2024b), whose density at point x is
+188
+ρ(x) =
+Z
+M
+ϕσ(x −v)ω(z)dv.
+To better fit the nearly mutual mappings between X and Y, Yao et al.
+189
+(2024b) formulate a novel MFCGAN framework by integrating the funda-
+190
+mental CycleGAN model (Zhu et al., 2017) with a manifold fitting module.
+191
+2.2. MFCGAN
+192
+Model Structure. As shown in Fig.2, MFCGAN for manifold fitting (Yao
+193
+et al., 2024b) mainly involves two generators denoted by GX : X →Y and
+194
+GY : Y →X, two discriminators written as DX and DY, and a specific
+195
+manifold fitting module FM (Yao et al., 2023). Before the training process,
+196
+we collect input x and latent representation y drawn from two domains X
+197
+and Y, respectively. Synthetic output ˜y in the domain Y can be directly
+198
+obtained through ˜y = GX(x). In contrast, synthetic input ˜x lying in the
+199
+domain X is generated with additive random noise, i.e., ˜x = GY(y) + ϵ. Two
+200
+discriminators, DX and DY, are introduced to distinguish ˜x from x and ˜y
+201
+from y, respectively. Before transforming data to DX, a specific module FM
+202
+is introduced to realize pseudo manifold fitting (Yao et al., 2023, 2024a,b).
+203
+This paper also employs the submodule FM to accelerate the training process
+204
+and improve the alignment of realistic samples with the latent manifold M.
+205
+8
+
+===== PAGE 10 =====
+ො𝑥
+෤𝑥
+Original Points
+Generated Points
+Ambient Region
+Latent Region
+Network Modules
+Sample Transfer
+Loss Computing Path
+G
+G
+F
+D
+D
+𝑦
+ො𝑦
+෤𝑦
+𝑥
+Figure 2: The architecture and computing process of MFCGAN.
+Objective Functions. The objective function mainly involves two adver-
+206
+sarial losses LX→Y (GX, DY) and LY→X (GY, DX, FM), and the cycle consis-
+207
+tency loss Lc (GX, GY). The least-square GAN loss (Zhu et al., 2017) is ex-
+208
+ploited to stabilize the training process and generate credible results. Given
+209
+data {xi, yi}n
+i=1, the loss function for evaluating the generated outputs {y, ˜y}
+210
+w.r.t. modules GX, DY, is defined by
+211
+LX→Y (GX, DY) = 1
+n
+n
+X
+i=1
+[DY (˜yi)]2 + [DY (yi) −1]2 ,
+and the loss function w.r.t. GY, DX, FM is
+212
+LY→X (GY, DX, FM) = 1
+n
+n
+X
+i=1
+[DX ◦FM (˜xi)]2 + [DX ◦FM (xi) −1]2 .
+Denote the generated samples bxi = GY ◦GX(xi) and byi = GX ◦GY(yi).
+213
+To limit the searching range of mappings, we further consider the cycle con-
+214
+sistency loss
+215
+Lc (GX, GY) = 1
+n
+n
+X
+i=1
+∥xi −bxi∥1 + ∥yi −byi∥1 ,
+(1)
+which helps to improve the algorithmic robustness against additive noise ϵ
+216
+(Zhu et al., 2017).
+217
+9
+
+===== PAGE 11 =====
+Given the dataset D = {xi, yi}n
+i=1, the whole objective function of MFC-
+218
+GAN (Yao et al., 2024b) is
+219
+LD (GX, GY, FM, DX, DY)
+=LX→Y (GX, DY) + LY→X (GY, DX, FM) + λLc (GX, GY)
+(2)
+where λ < 0 is a negative parameter that strikes a tradeoff between the ad-
+220
+versarial and cycle consistency losses. The optimization scheme of MFCGAN
+221
+in (Yao et al., 2024b) can be formulated as
+222
+G∗
+X, G∗
+Y, F ∗
+M, D∗
+X, D∗
+Y = arg max
+GX ,GY
+arg min
+FM,DX ,DY
+LD (GX, GY, FM, DX, DY) .
+(3)
+Furthermore, Eq.(3) can be parameterized by
+223
+θ∗= (θ∗
+2, θ∗
+1) ∈arg max
+θ2
+arg min
+θ1
+LD (θ) ,
+(4)
+where θ = (θ2, θ1) stand for the parameters of modules {GX, GY} and
+224
+{FM, DX, DY}, respectively.
+225
+Despite achieving the promising performance, the MFCGAN (Yao et al.,
+226
+2024b) is vulnerable when facing corrupted data with noisy dimensions, e.g.,
+227
+noisy inputs or outputs (see Figure 1). To address this issue, we attempt to
+228
+mitigate the negative impacts of noisy dimensions by assigning a mask value
+229
+of 0 to the irrelevant or redundant features (Zhou et al., 2022).
+230
+3. Bilevel CycleGAN for Manifold Fitting
+231
+3.1. Probabilistic Bilevel Framework
+232
+To improve the robustness of CycleGAN-based manifold fitting, we in-
+233
+troduce a bilevel optimization framework with a meta learner at the upper
+234
+level, which learns the masks on the ambient variable X ∈X (or the latent
+235
+variable Y ∈Y) to remove the impact of noisy dimensions. Let the mask
+236
+m ∈{0, 1}p be a binary vector learned by the upper problem, where p = d0
+237
+when assigning m on X (or p = d for Y). mi = 1 implies the i-th fea-
+238
+ture is selected as the informative one and otherwise ignored. Let θ be the
+239
+parameter of the decision function in the lower level depending on m, and
+240
+Cm = {m : mi ∈{0, 1}, ∥m∥0 ≤C, i = 1, 2, · · · , p}
+10
+
+===== PAGE 12 =====
+is the feasible region of m with a given positive constant C. Here, the mask
+241
+m is assigned on the inputs (xi, ˆxi, ˜xi) when solving the lower-level problem,
+242
+where ˜yi = GX(m ⊙xi), bxi = GY ◦GX(m ⊙xi).
+243
+The discrete bilevel CycleGAN framework is formulated as follows.
+244
+Upper Level Problem. Given the meta dataset Dmeta = {xi, yi}m1
+i=1, we
+245
+formulate the following discrete optimization problem
+246
+m = arg min
+m∈Cm
+LDmeta (θ∗(m)) ,
+(5)
+where
+247
+LDmeta (θ∗(m)) = 1
+m1
+m1
+X
+i=1
+[DY (˜yi)]2 + [DY (yi) −1]2 + [DX ◦FM (˜xi)]2
++ [DX ◦FM (xi) −1]2 + λ ∥xi −bxi∥1 + λ ∥yi −byi∥1
+
+.
+Lower Level Problem. Given the training set Dtrain = {xi, yi}m1+m2
+i=m1+1, the
+248
+lower level problem follows Eq.(4) is
+249
+θ∗(m) ∈arg max
+θ2
+arg min
+θ1
+LDtrain (θ; m) ,
+(6)
+where
+250
+LDtrain (θ; m) = 1
+m2
+m1+m2
+X
+i=m1+1
+[DY (˜yi)]2 + [DY (yi) −1]2 + [DX ◦FM (m ⊙˜xi)]2
++ [DX ◦FM (m ⊙xi) −1]2 + λ ∥m ⊙(xi −bxi)∥1 + λ ∥yi −byi∥1
+
+.
+In general, it is intractable to solve the above discrete bilevel problem
+251
+directly. Fortunately, we can formulate its continuous form with the help of
+252
+policy gradient estimation (Zhou et al., 2022), where the discrete parameter
+253
+space is transformed into the continuous probability space (Zhao et al., 2023).
+254
+We consider mi as a Bernoulli random variable mi ∼Bern (si), where si ∈
+255
+[0, 1] represents the probability of mi = 1.
+Denote the new domain on
+256
+probability variable s ∈Rp as
+257
+Cs = {s : 0 ≤si ≤1, ∥s∥1 ≤C, i = 1, 2, · · · , p} .
+The above discrete bilevel optimization problem can be relaxed into the
+258
+following probabilistic expected form
+259
+min
+s∈Cs Φ(s, θ) := Ep(m|s)LDmeta (θ∗(m)) ,
+s.t. θ∗(m) ∈arg max
+θ2
+arg min
+θ1
+LDtrain(θ; m),
+(7)
+11
+
+===== PAGE 13 =====
+𝑚𝑡
+𝜃𝑡+1
+s𝑡+1
+𝑚𝑡+1
+𝜃𝑡+2
+Original Points
+Generated Points
+Ambient Region
+Latent Region
+Network Modules
+Assign mask
+Assign mask
+Update Network
+Update Network
+Parameters
+Sample Transfer
+Loss Computing Path
+Parameter Update
+{
+,
+,
+,
+}
+,
+G
+G
+F
+D
+D
+=
+G
+G
+F
+D
+D
+𝑚ʘ𝑥
+𝑚ʘො𝑥
+𝑚ʘ෤𝑥
+෤𝑦
+ො𝑦
+𝑦
+Figure 3: The architecture and computing process of BCGAN. Mask m could also be
+assigned to outputs.
+where loss function ℓ(·) forms the object function in Eq.(5) and Eq.(6), i.e.,
+260
+LDmeta (θ∗(m)) = 1
+m1
+m1
+X
+i=1
+ℓ(s, θ1, θ2; xi, yi).
+The iterative optimization process of BCGAN is illustrated in Figure 3.
+261
+Unlike DAE (Vincent et al., 2008) removing a fixed percentage of features,
+262
+BCGAN can effectively eliminate noise from the original space. We obtain
+263
+two estimated generators bGX and bGY w.r.t. the expected G∗
+X, G∗
+Y, and the
+264
+masks m in the input region X or output Y after training. By controlling
+265
+the distribution on the latent space Y, the proposed BCGAN can be applied
+266
+to the following tasks:
+267
+• Manifold Reconstruction. The desired maps bGY and logarithmic map
+268
+bGX are used to empirically reconstruct M by c
+M = bGY ◦bGX(·).
+269
+• Noise Reduction. By applying bGY ◦bGX to any observed xi, we obtain a
+270
+denoised representation ˆxi that lies on the reconstructed manifold c
+M.
+271
+• Sample Generation and Nonlinear Interpolation. To explore the inter-
+272
+mediate states between inputs xi and xj, their corresponding latent
+273
+12
+
+===== PAGE 14 =====
+Algorithm 1 SSGDA for solving BCGAN
+Input: Meta set Dmeta = {xi, yi}m1
+i=1 and training set Dtrain = {xi, yi}m1+m2
+i=m1+1,
+the total number of iterations T, step sizes η, γ1 and γ2.
+Initialization: s0, θ0
+1 and θ0
+2.
+1: for t = 0 to T −1 do
+2:
+Uniformly sample zi = (xi, yi) ∈Dmeta and zj = (xj, yj) ∈Dtrain
+3:
+st+1 = PCs
+st −η∇sℓ(st, θt
+1, θt
+2; zi)
+
+4:
+θt+1
+1
+= θt
+1 −γ1∇θ1ℓ(st+1, θt
+1, θt
+2; zj)
+5:
+θt+1
+2
+= θt
+2 + γ2∇θ2ℓ(st+1, θt+1
+1
+, θt
+2; zj)
+6: end for
+Output: bs = sT, bθ1 = θT
+1 and bθ2 = θT
+2 .
+representations ˆyi = bGX(xi) and ˆyj = bGX(xj) can be further fed into
+274
+bGY to realize nonlinear interpolation.
+275
+Remark 1. Indeed, Φ(s, θ) in (7) should be rewritten by Φ(s, θ(s)), where
+276
+the learned network parameter θ is dependent on m and s. The reason for
+277
+such simplification can be illustrated by (9) with the efficient PGE optimiza-
+278
+tion and probabilistic representation, where the gradient ∇sΦ(s, θ(s)) does
+279
+not involve ∂θ(s)/∂s.
+280
+Remark 2. Under the independent assumption on variable mi, we can derive
+281
+its distribution as p(m | s) = Πp
+i=1 (si)mi (1 −si)(1−mi). Since Em∼p(m|s)∥m∥0 =
+282
+Pp
+i=1 si, the original constraint on Cm is further transformed into Cs.
+283
+3.2. Optimization Algorithm of BCGAN
+284
+Now we present the optimization algorithm for assigning masks on the
+285
+ambient domain X ⊆Rd0. Initialize the parameters of (GX, GY; FM, DX, DY)
+286
+as θ0 := {θ0
+2, θ0
+1}, the mask variable as m0 ∈Rd0, and the corresponding
+287
+probability variable s0 ∈Rd0. Algorithm 1 states the computing steps of
+288
+probabilistic BCGAN through single time-scale stochastic gradient descent
+289
+ascent (SSGDA). The optimization procedure of (7) at the t-th iteration
+290
+mainly involve:
+291
+Step 1: Computing network parameter θt with given mt−1.
+292
+θt ∈arg max
+θ2
+arg min
+θ1
+LDtrain θ; mt−1
+,
+(8)
+13
+
+===== PAGE 15 =====
+Algorithm 2 Projection Operation PC(a)
+Input: Vector a ∈Rd, target domain C = {a : 0 ≤ai ≤1, ∥a∥1 ≤C}.
+Computation Steps:
+1) Computing the auxiliary variable b satisfying
+1⊤[min (1, max (0, a −b · 1))] −C = 0
+2) Computing the auxiliary variable c satisfying
+c ←max (0, b)
+3) Update a
+a∗←min (1, max (0, a −c · 1))
+Output: PC(a) = a∗.
+where LDtrain (θ; mt−1) denotes the objective function (3) with m. The lower-
+293
+level problem is solved by stochastic gradient descent ascent in Algorithm 1.
+294
+Step 2: Computing probability st with given θt.
+From the probabilis-
+295
+tic BCGAN in (7), the learning target changes from the discrete masks m
+296
+into the continuous probability s, which is efficiently updated by the policy
+297
+gradient estimator (Zhou et al., 2022)
+298
+∇sΦ(s, θ) = Ep(m|s)LDmeta (θ∗(m)) ∇s ln p(m | s).
+(9)
+This computing procedure involves unbiased gradient estimation, elimi-
+299
+nating the computational burdens associated with the inverse of the Hessian
+300
+matrix or implicit differentiation (Zhou et al., 2022; Zhao et al., 2023).
+301
+Denote ηt as the step size for updating the probability variable s at the
+302
+t-th step. Given θt,
+303
+st ←PCs
+st−1 −ηtLDmeta θt
+∇s ln p(mt−1 | st−1)
+
+,
+(10)
+where the projection PCs(s) from s to the domain Cs is summarized in Algo-
+304
+rithm 2. Moreover, Appendix D states theoretical guarantees of the closed-
+305
+form solution w.r.t. (10).
+306
+Step 3: Updating mask mt with given st. For mt = (mt
+1, · · · , mt
+d0) ∈
+307
+Rd0 following mi ∼Bern (si), we obtain the new mask mt according to st.
+308
+Finally, the obtained mask is left for future training or prediction processes.
+309
+Remark 3. The manifold fitting module (FM) is designed to tackle addi-
+310
+tive noise and pixel noise, as supported by relevant work on statistical theory
+311
+and practical experiments (Yao et al., 2023; Yao and Xia, 2019; Yao et al.,
+312
+14
+
+===== PAGE 16 =====
+2024b). This module exhibits reliable and robust properties. To further elim-
+313
+inate noisy dimensions or channels from vectors or grayscale images, the
+314
+probabilistic bilevel masking framework is designed to learn binary masks (for
+315
+vector data) or binary matrices (for matrix data and gray images). Both tech-
+316
+niques are essential for enabling robust manifold fitting, image denoising, and
+317
+interpolation.
+318
+4. Theoretical Assessments
+319
+This section presents the generalization analysis for the upper-level meta-
+320
+learner of BCGAN. Let T be the maximum number of iterations. Denote
+321
+ηt, γt
+1 and γt
+2 as the stepsize for updating s, θ1, θ2 at the t-th iteration,
+322
+respectively. All proofs can be found in Appendixes B and C.
+323
+Given meta set Dmeta = {zi}m1
+i=1 ∼Dm1
+1
+= {(xi, yi)}m1
+i=1 ∼Dm1
+1
+and training
+324
+set Dtrain = {zi}m2
+i=1 = {(xi, yi)}m1+1
+i=1
+∼Dm1+m2
+2
+by independent sampling
+325
+from distributions D1 and D2, respectively. Let (s, θ1, θ2) in (7) be estimated
+326
+by a stochastic algorithm A with data Dmeta, Dtrain, i.e. A (Dmeta, Dtrain).
+327
+Now we introduce the upper-level population risk w.r.t D1 and the empirical
+328
+risk w.r.t Dmeta defined respectively as
+329
+R (A (Dmeta, Dtrain)) := R (s, θ1, θ2) = Ez∼D1[ℓ(s, θ1, θ2; z)],
+and
+330
+RDmeta (A (Dmeta, Dtrain)) := RDmeta (s, θ1, θ2) = 1
+m1
+m1
+X
+i=1
+[ℓ(s, θ1, θ2; zi)] ,
+where ℓis the objective function stated in (5) and θ1, θ2 are the inner model
+331
+parameters given the outer model parameter s.
+332
+Motivated by previous works (Bao et al., 2021; Pan et al., 2024; Zhang
+et al., 2024), the algorithmic capability of meta learner is evaluated by
+R∗(A (Dmeta, Dtrain)) := R (s∗, θ1, θ2) = inf
+s∈Cs R (s, θ1, θ2) ,
+and
+ˆRDmeta (A (Dmeta, Dtrain)) := RDmeta (ˆs, θ1, θ2) = inf
+s∈Cs RDmeta (s, θ1, θ2) ,
+where RDmeta (ˆs, θ1, θ2) ≤RDmeta (s∗, θ1, θ2).
+333
+15
+
+===== PAGE 17 =====
+The excess risk E [R (A (Dmeta, Dtrain)) −R∗(A (Dmeta, Dtrain))] with E :=
+334
+EA,Dmeta,Dtrain can be bounded by
+335
+E [R (A (Dmeta, Dtrain)) −RDmeta (A (Dmeta, Dtrain))]
+|
+{z
+}
+(I)
++ E
+h
+RDmeta (A (Dmeta, Dtrain)) −ˆRDmeta (A (Dmeta, Dtrain))
+i
+|
+{z
+}
+(II)
+,
+(11)
+where (I ) is the generalization gap to measure the difference between the
+336
+population risk and the empirical risk, and (II ) is the optimization error to
+337
+characterize the approximation ability of the computing algorithm.
+338
+Denote Θ1 and Θ2 as the parameter space for θ1 and θ2, respectively.
+339
+The following conditions for objective functions have been extensively used
+340
+in convergence analysis for bilevel optimization (Ji et al., 2021; Liu et al.,
+341
+2022) and stability-based generalization analysis for single-level optimization
+342
+(Hardt et al., 2016).
+343
+Assumption 1. Loss function ℓis jointly l-Lipschitz continuous w.r.t. s, θ1
+344
+and θ2, if there holds
+345
+|ℓ(s, θ1, θ2; z) −ℓ(s′, θ′
+1, θ′
+2; z)| ≤l
+
+
+
+
+
+
+
+s −s′
+θ1 −θ′
+1
+θ2 −θ′
+2
+
+
+
+
+
+
+
+2
+for any (s, θ1, θ2), (s′, θ′
+1, θ′
+2) ∈Cs × Θ1 × Θ2 and z ∼D1.
+346
+Assumption 2. Loss function ℓis jointly L-smooth w.r.t. s, θ1 and θ2, if
+347
+there holds
+348
+∥∇ℓ(s, θ1, θ2; z) −∇ℓ(s′, θ′
+1, θ′
+2; z)∥2 ≤L
+
+
+
+
+
+
+
+s −s′
+θ1 −θ′
+1
+θ2 −θ′
+2
+
+
+
+
+
+
+
+2
+for any (s, θ1, θ2), (s′, θ′
+1, θ′
+2) ∈Cs × Θ1 × Θ2 and z ∼D1.
+349
+Now we state the upper bounds for Algorithm 1 on its generalization error
+350
+and excess risk.
+351
+16
+
+===== PAGE 18 =====
+Theorem 1. Let Assumptions 1, 2 be true, and let A be Algorithm 1 with T
+352
+iterations. Given the non-increasing step size ηt′ = max{ηt, γt
+1, γt
+2} satisfying
+353
+ηt′ ≤c1
+tL ≤1 with a positive constant c1, we have
+354
+|E [R (A (Dmeta, Dtrain)) −RDmeta (A (Dmeta, Dtrain))] | ≤
+
+
+
+
+
+
+
+
+
+O
+
+T
+m1
+
+,
+if 0 < c1 < 1/7
+O
+
+T ln(T)
+m1
+
+,
+if c1 = 1/7
+O
+
+T 7c1
+m1
+
+,
+if c1 > 1/7.
+Remark 4. Theorem 1 indicates that the smoothness, step sizes, and the
+355
+number of iterations significantly influence the generalization performance of
+356
+SSGDA. Indeed, the generalization error of minimax problems has been in-
+357
+vestigated in some existing literature (Lei et al., 2021; Farnia and Ozdaglar,
+358
+2021; Ozdaglar et al., 2022). In contrast, Theorem 1 characterizes the gen-
+359
+eralization capability of the meta learner for the bilevel minimax problem. To
+360
+the best of our knowledge, the generalization analysis of the minimax prob-
+361
+lem equipped with a bilevel scheme (Bao et al., 2021; Shu et al., 2023; Zhang
+362
+et al., 2024) has not been previously discussed.
+363
+Theorem 2. Suppose that loss function ℓis convex with respect to s, the
+364
+domain Cs is bounded in Rd0, and E [∥s0 −ˆs∥] ≤V . Under the same as-
+365
+sumptions of Theorem 1, there holds
+366
+E
+h
+RDmeta (A (Dmeta, Dtrain)) −ˆRDmeta (A (Dmeta, Dtrain))
+i
+≤O
+
+V
+max{η, γ1, γ2}T + max{η, γ1, γ2}l2
+
+.
+Moreover, we have
+367
+E [R (A (Dmeta, Dtrain)) −R∗(A (Dmeta, Dtrain))] ≤O (1/√m1)
+by setting the iteration number T ≍√m1 and the step size ηt′ = max{ηt, γt
+1, γt
+2} ≤
+368
+min{ c
+√
+T , c1
+t } with c, c1 ∈(0, 1/7),
+369
+Remark 5. Theorem 2 illustrates that the excess risk of the SSGDA algo-
+370
+rithm can achieve the approximation rate of O
+1/√m1
+
+under mild condi-
+371
+tions on the loss function and iteration design.
+372
+17
+
+===== PAGE 19 =====
+Remark 6. The complexity of BCGAN is analyzed across its core modules.
+373
+The upper-level probabilistic bilevel optimization (SSGDA) brings O(T · (p +
+374
+L · r)) complexity with backpropagation, where T is the number of outer iter-
+375
+ations, p stands for the ambient dimension (m ∈Rp). L and r are relevant
+376
+to the lower-level GAN (with L layers and r parameters per layer).
+The
+377
+lower-level cycle-consistent GAN training has a complexity of O(T · L · r), as
+378
+each iteration involves forward and backward passes for both generators and
+379
+discriminators. Overall, BCGAN’s complexity reaches O(T · (p + 2L · r)).
+380
+Practically, training BCGAN on Circle data requires approximately 17 min-
+381
+utes in these repeated experiments. To accelerate training, the stochastic Nes-
+382
+terov gradients (Gong et al., 2024) could be utilized in future investigations
+383
+to reduce computational overhead.
+384
+5. Experimental Evaluations
+385
+This section validates the effectiveness of BCGAN on simulated and real-
+386
+world data. All experiments are implemented in Python on a PC equipped
+387
+with an Intel(R) Xeon(R) Platinum 8175M CPU and an NVIDIA RTX
+388
+A6000 GPU. Appendix E presents the detailed descriptions for the exper-
+389
+imental settings. The implementation code and data are available at https:
+390
+//github.com/zxlml/BCGAN.
+391
+5.1. Baselines and Parameter Selection
+392
+Baselines. The empirical performance of the proposed BCGAN is com-
+393
+pared with RealNVP (Dinh et al., 2017), MAF (Papamakarios et al., 2017),
+394
+MADE (Germain et al., 2015), RoundTrip (Liu et al., 2021), DAE (Vincent
+395
+et al., 2008), CycleGAN (Zhu et al., 2017), MFCGAN (Yao et al., 2024b)
+396
+and MFS (Yao et al., 2023).
+397
+Inspired by (Yao et al., 2024b), DAE, CycleGAN, MFCGAN and BC-
+398
+GAN are implemented independently with the same network structure and
+399
+SSGDA algorithm, sharing similar hyperparameters and corresponding tun-
+400
+ing strategies. The generators GY from the latent space of these GANs are
+401
+fed with uniformly generated random samples as inputs (Yao et al., 2024b).
+402
+For other baselines originally designed for distribution estimation, we adopt
+403
+the recent normalizing flow implementation 1 and modify their released code
+404
+to save the generated samples for evaluation.
+405
+1See https://github.com/kamenbliznashki/normalizing_flows/tree/master.
+18
+
+===== PAGE 20 =====
+Parameter Selection. Similar to (Yao et al., 2024b), this paper sets
+406
+the number of iterations as 200, the total sample size as 104, and the total
+407
+epochs as 200 by default. The relevant step sizes η, γ1, γ2 and penalty coef-
+408
+ficient λ are all tuned across [10−4, 10−3, 10−2, 10−1] with a linear decay per
+409
+50 iterations, which are shared for all compared methods. Additionally, Ap-
+410
+pendix E.3 states the experimental analysis for the varying C on the specific
+411
+datasets. The pool size of the image buffer is set to 50 by default, which
+412
+stores previously generated images of GANs. Tables 2 and 3 provide the
+413
+quantitative assessments of the manifold fitting by calculating the distances
+414
+from sample points to the latent manifold, where three primary metrics are
+415
+employed, including the mean and standard deviation, 95th percentile dis-
+416
+tance, and the percentage of extreme samples beyond 3σ. Furthermore, we
+417
+present a visual representation of the generated samples from each algorithm,
+418
+utilizing the scatter plots in Figures 1, 4 and 5. For simplicity, only the cor-
+419
+rupted scenarios are plotted in these figures.
+420
+5.2. Empirical Validations on Synthetic Data
+421
+5.2.1. Manifold Estimation and Denoising on Synthetic Data
+422
+Denote U and N as the uniform distribution and the normal distribu-
+423
+tion. N(0, I2) stands for the two-dimensional standard Gaussian distribu-
+424
+tion where Ii is a i × i identity matrix. Here, we first generate the following
+425
+simulated datasets, which are used in (Yao et al., 2024a).
+426
+• Case 1: Circle. Generate ai
+i.i.d
+∼U(0, 1) and bi
+i.i.d
+∼N(0, I2) ∈R2 for
+427
+i = 1, 2, · · · , N. Then the ambient data {Xi}N
+i=1 is collected by
+428
+Xi = (cos (2πai) , sin (2πai)) + 0.01bi, 1 ≤i ≤N.
+(12)
+Besides, we also consider adding one or more i.i.d. noisy dimensions,
+429
+e.g., Xi,3 ∈N(0, 100). The same operation is also applied to the fol-
+430
+lowing datasets.
+431
+• Case 2: Involute. Generate ai
+i.i.d
+∼U(0, 1) and bi
+i.i.d
+∼N(0, I2) ∈R2 for
+432
+i = 1, 2, · · · , N. The ambient data {Xi}N
+i=1 is collected by
+433
+Xi = (ai cos (6πai) , ai sin (6πai)) + 0.01bi, 1 ≤i ≤N.
+(13)
+19
+
+===== PAGE 21 =====
+• Case 3: Torus.
+Generate ai
+i.i.d
+∼
+U(0, 1), bi
+i.i.d
+∼
+U(0, 1) and ci ∼
+434
+N(0, I3) ∈R3 for i = 1, 2, · · · , N.
+The ambient data {Xi}N
+i=1 can
+435
+be represented by {(Xi,1, Xi,2, Xi,3) + ci}N
+i=1 with
+436
+
+
+
+Xi,1 = (1 + cos (2πai) /2) cos (2πbi)
+Xi,2 = (1 + cos (2πai) /2) sin (2πbi)
+Xi,3 = sin (2πai) /2
+.
+(14)
+• Case 4: Calabi-Yau Manifold. A classical illustration of the Calabi-Yau
+437
+manifold is provided by the Fermat quartic x4
+1+x4
+2+x4
+3+x4
+4 = 0, where
+438
+(x1, x2, x3, x4) lies in the complex projective three-dimensional space.
+439
+After the simplification operation of dividing by x4
+4 while constraining
+440
+x4
+3/x4
+4 as a constant (Yao et al., 2024b), the Calabi-Yau manifold with
+441
+three complex dimensions can be generated by
+442
+x4
+1 + x4
+2 = 1,
+x1, x2 ∈C,
+(15)
+where the first component x1(a, b, c1) = exp
+ c1π
+2 i
+ p
+cosh(a + bi) and
+443
+second component x2 (a, b, c2) = exp
+ c2π
+2 i
+ p
+sinh(b −ai). Re(a) and
+444
+Im(a) represent the real and imaginary parts of complex number a
+445
+respectively.
+Each integer pair (c1, c2) satisfies 0 ≤c1, c2 ≤3, a ∈
+446
+(−1.50, −1.45, −1.40, · · · , 1.50) and b encompasses a sequence from 0 to
+447
+π/2 with step size of 1/640. The resulting surface can be embedded in
+448
+a 4-dimensional Euclidean space, by dividing (x1, x2) into their real and
+449
+imaginary parts (Re(x1), Re(x2), Im(x1), Im(x2)) ∈R4. As illustrated
+450
+in (Yao et al., 2024b, 2023), the embedded manifold can be further
+451
+projected to R3 with
+452
+(Re(x1), Re(x2), cos(α) Im(x1) + sin(α) Im(x2)),
+which takes α = 1 in practice for simplicity. Furthermore, the additive
+453
+noise following N(0, 0.01) is added to the input in R4.
+454
+Additional details on collected data can be found in Appendix E. Based
+455
+on the above generation steps, the ambient data X is collected with the
+456
+default size of 313, 296 for the Calabi-Yau manifold and 104 for the rest of
+457
+the cases. For the target ambient data Y, we also generate 104 points with
+458
+each dimension subjected to U(0, 1).
+459
+20
+
+===== PAGE 22 =====
+Table 2: Average distances between samples and latent manifold on three clean synthetic datasets. “Input” represents the
+information of the original training sets (the standard deviation σ = 0.01).
+Model
+Circle
+Involute
+Torus
+Mean±SD
+95% quantile
+Percent > 3σ
+Mean±SD
+95% quantile
+Percent > 3σ
+Mean±SD
+95% quantile
+Percent > 3σ
+Input
+8.13(10−3) ± 6.14(10−3)
+2.00(10−2)
+0.42%
+8.29(10−3) ± 5.90(10−3)
+1.97(10−2)
+0.33%
+7.98(10−3) ± 6.04(10−3)
+1.98(10−2)
+0.22%
+RealNVP
+3.17(10−2) ± 1.07(10−1)
+1.29(10−1)
+12.80%
+6.89(10−2) ± 1.11(10−1)
+15.61(10−2)
+60.77%
+8.15(10−2) ± 2.02(10−1)
+3.22(10−1)
+45.90%
+MAF
+3.72(10−2) ± 8.54(10−2)
+1.86(10−1)
+21.19%
+6.85(10−2) ± 5.18(10−2)
+1.53(10−1)
+69.94%
+9.05(10−2) ± 1.06(10−1)
+3.23(10−1)
+58.93%
+MADE
+3.67(10−1) ± 3.01(10−1)
+8.81(10−1)
+93.59%
+8.99(10−2) ± 7.89(10−2)
+1.65(10−1)
+80.21%
+1.89(10−1) ± 1.79(10−1)
+4.77(10−1)
+87.78%
+RoundTrip
+1.78(10−2) ± 8.06(10−3)
+3.22(10−2)
+12.10%
+2.09(10−2) ± 2.34(10−2)
+7.59(10−2)
+15.33%
+1.65(10−2) ± 1.21(10−2)
+4.02(10−2)
+13.14%
+DAE
+1.26(10−3) ± 1.02(10−3)
+3.29(10−3)
+0.00%
+3.21(10−2) ± 5.44(10−2)
+1.53(10−1)
+23.51%
+2.31(10−2) ± 3.29(10−2)
+7.37(10−2)
+2.41%
+CycleGAN
+1.95(10−3) ± 1.44(10−3)
+3.65(10−3)
+0.00%
+5.86(10−3) ± 1.14(10−2)
+1.44(10−2)
+2.47%
+3.79(10−3) ± 1.28(10−2)
+7.84(10−1)
+2.19%
+MFCGAN
+7.45(10−4) ± 8.47(10−4)
+2.34(10−3)
+0.00%
+5.13(10−3) ± 3.26(10−2)
+1.16(10−2)
+2.31%
+6.81(10−3) ± 2.73(10−2)
+1.05(10−2)
+1.81%
+BCGAN (Ours)
+7.21(10−4) ± 7.61(10−4)
+2.17(10−3)
+0.00%
+5.08(10−3) ± 3.19(10−2)
+1.18(10−2)
+2.18%
+6.37(10−3) ± 2.59(10−2)
+9.62(10−3)
+1.74%
+Table 3: Average distances between samples and latent manifold on three corrupted synthetic datasets. These results are
+obtained on corrupted data with noisy dimensions following N(0, 100).
+Model
+Circle with corrupted input
+Involute with corrupted input
+Torus with corrupted output
+Mean±SD
+95% quantile
+Percent > 3σ
+Mean±SD
+95% quantile
+Percent > 3σ
+Mean±SD
+95% quantile
+Percent > 3σ
+Input
+7.06(100) ± 5.88(100)
+18.62(100)
+98.04%
+7.85(100) ± 6.01(100)
+19.51(100)
+99.76%
+7.98(10−3) ± 6.04(10−3)
+1.98(10−2)
+0.22%
+RealNVP
+8.15(100) ± 8.68(100)
+22.98(100)
+98.06%
+9.46(100) ± 6.93(100)
+22.14(100)
+99.94%
+8.36(10−2) ± 1.57(10−1)
+3.26(10−1)
+46.99%
+MAF
+9.10(100) ± 8.98(100)
+2.48(102)
+98.85%
+9.44(100) ± 6.81(100)
+21.65(100)
+99.96%
+8.56(10−2) ± 1.04(10−1)
+3.13(10−1)
+56.31%
+MADE
+7.56(100) ± 7.97(100)
+21.69(100)
+99.33%
+7.92(100) ± 5.92(100)
+19.23(100)
+99.95%
+1.89(10−1) ± 1.79(10−1)
+4.77(10−1)
+87.75%
+RoundTrip
+7.44(100) ± 6.06(100)
+19.32(100)
+99.82%
+10.35(100) ± 7.53(100)
+24.71(100)
+100.00%
+4.72(10−2) ± 4.56(10−2)
+1.31(10−1)
+56.84%
+DAE
+5.42(10−1) ± 4.46(10−1)
+7.37(10−1)
+21.74%
+8.47(10−1) ± 6.52(10−1)
+15.42(10−1)
+37.41%
+3.40(10−2) ± 5.33(10−2)
+8.79(10−2)
+35.94%
+CycleGAN
+7.54(100) ± 6.32(100)
+20.82(100)
+98.43%
+7.71(100) ± 4.09(100)
+16.11(100)
+99.81%
+3.86(10−2) ± 4.62(10−2)
+9.75(10−2)
+41.13%
+MFCGAN
+7.54(100) ± 6.32(100)
+20.82(100)
+99.63%
+7.22(100) ± 4.55(100)
+14.78(100)
+99.77%
+3.27(10−2) ± 5.24(10−2)
+8.36(10−2)
+34.79%
+BCGAN (Ours)
+7.49(10−4) ± 8.02(10−4)
+2.26(10−3)
+0.00%
+5.17(10−3) ± 3.25(10−2)
+1.27(10−2)
+2.53%
+6.44(10−3) ± 2.71(10−2)
+1.06(10−2)
+2.09%
+21
+
+===== PAGE 23 =====
+(a) Input
+(b) CycleGAN
+(c) MFCGAN
+(d) RoundTrip
+(e) MADE
+(f) MAF
+(g) RealNVP
+(h) BCGAN (Ours)
+Figure 4: Results in the Involute dataset with noisy input. Clean dataset includes input
+[X1, X2], while the corrupted dataset involves [X1, X2, Xnoise] with Xnoise ∈N(0, 100).
+Experimental evaluations are conducted under both clean and noisy sce-
+460
+narios. In Figure 1 on the circle dataset, BCGAN demonstrates superior
+461
+performance in reconstructing the underlying manifold structure from noisy
+462
+inputs, whereas baseline methods like CycleGAN, MFCGAN, and MADE
+463
+struggle with noise-induced distortions.
+This result highlights BCGAN’s
+464
+ability to automatically identify and mask noisy dimensions, allowing for
+465
+accurate manifold estimation even in the presence of significant data corrup-
+466
+tion.
+467
+Table 2 shows that our BCGAN provides better approximation perfor-
+468
+mance on clean datasets, where distances between sample points and the
+469
+latent manifold are much smaller than other baselines. To better validate
+470
+the robustness with corrupted input x or output y, we consider adding noisy
+471
+dimension Xnoise ∈N(0, 100) to the input of circle and involute datasets, as
+472
+well as Ynoise ∈N(0, 100) in the output of torus dataset. As presented in
+473
+Figures 1 and 4, extreme random corruptions in the input obviously mislead
+474
+these baselines to inappropriate mappings or density estimation, and evi-
+475
+dently degrade their fitting capability. This is reasonable since CycleGAN
+476
+and MFCGAN utilize the cycle consistency loss (1). Other baselines are ini-
+477
+22
+
+===== PAGE 24 =====
+(a) Input
+(b) CycleGAN
+(c) MFCGAN
+(d) RoundTrip
+(e) MADE
+(f) MAF
+(g) RealNVP
+(h) BCGAN (Ours)
+Figure 5: Results in Torus dataset with noisy output. Clean Involute dataset includes
+output [Y ], while the corrupted dataset involves [Y, Ynoise] with Ynoise ∈N(0, 100).
+tially designed for density estimation, which heavily relies on the quality of
+478
+the original inputs. Our findings on BCGAN are consistent with the obser-
+479
+vation in (Yao et al., 2024a) that operations on the original data space can
+480
+help to reduce the information loss.
+481
+Table 3 and Figure 5 further quantify the robustness of BCGAN and some
+482
+unsupervised baselines (RealNVP, MAF, and MADE) against noisy inputs or
+483
+outputs. Our findings verify that BCGAN is robust against noisy corruptions,
+484
+whereas random information negatively impacts the density estimation or the
+485
+Euclidean distance in the cycle consistency loss. Notably, the fitting results
+486
+on the torus show that the noisy outputs are also harmful to CycleGAN
+487
+and MFCGAN for manifold fitting and supervised RoundTrip for density
+488
+estimation. These simulated results demonstrate that the proposed BCGAN
+489
+could assign the proper masks on y and present the lowest fitting error.
+490
+Moreover, we evaluate the performance of BCGAN for the Calabi-Yau
+491
+manifold with noisy features (Yau, 2008). Here, the original input is cor-
+492
+rupted by a new dimension Xnoise ∈N(0, 100). In Figure 6, we visualize the
+493
+results by comparing the generated points and the underlying manifold. We
+494
+also adopt the pseudo-bias defined as the norm of x4
+1 +x4
+2 −1 for x ∈C2 (Yao
+495
+23
+
+===== PAGE 25 =====
+(a) Results in Front View
+(b) Results in Right View
+(c) Results in Top View
+Input
+BCGAN
+BCGAN w/o F
+BCGAN w/o Cycle
+MFCGAN
+CycleGAN
+MFS
+0
+10
+20
+30
+40
+50
+60
+70
+80
+Pseudo-bias
+(d) Results of Pseudo-bias
+Figure 6: Experiments on Calabi-Yau manifold with noisy input Xnoise ∈N(0, 100). Fig-
+ures (a) to (c) show different views of the fitting results on the surfaces of the 3D projected
+manifold, where the red points represent the generated samples. Figure (d) presents the
+pseudo-bias between input and generated samples of these baselines. Furthermore, abla-
+tion experiments are conducted by removing module FM for completeness.
+et al., 2024b), with a boxplot in Figure 6. As validated in (Yao et al., 2024b),
+496
+MFCGAN is fully capable of learning from data with merely additive noise.
+497
+However, the results in the boxplot reveal its sensitivity to corruptions such
+498
+as noisy dimensions and channels. In contrast, BCGAN provides the narrow-
+499
+est pseudo-bias distribution even with noisy ambient representation, which
+500
+24
+
+===== PAGE 26 =====
+0
+10
+20
+30
+40
+50
+Iteration T
+0
+1
+2
+3
+4
+5
+Total in Meta Set
+(a) Loss of Upper Model
+0
+50
+100
+150
+200
+250
+300
+Iteration T
+0
+1
+2
+3
+4
+Total in Training Set
+(b) Loss of Upper Model
+0
+50
+100
+150
+200
+250
+300
+Iteration T
+0.0
+0.2
+0.4
+0.6
+0.8
+> in Training Set
+(c) X →Y Module
+0
+50
+100
+150
+200
+250
+300
+Iteration T
+0.000
+0.005
+0.010
+0.015
+0.020
+0.025
+> in Training Set
+(d) Y →X Module
+0
+50
+100
+150
+200
+250
+300
+Iteration T
+0.0
+0.5
+1.0
+1.5
+2.0
+2.5
+3.0
+c in Training Set
+(e) Cycle Loss
+Figure 7: Convergence validation on circle dataset. Figures (a) and (b) present the curves
+of the upper and lower objective functions. (c)-(e) correspond to three components of the
+lower-level objective function, respectively.
+verifies its robust under complex noise scenarios. The ablation studies are
+501
+conducted by removing the manifold fitting module F and regarding MFC-
+502
+GAN as the baseline without the bilevel masking mechanism. The results
+503
+in Figure 6 demonstrate that the manifold fitting module FM is robust to
+504
+additive noise, and the bilevel mask mechanism is effective in handling noisy
+505
+channels and dimensions.
+506
+5.2.2. Validation on Optimization Convergence
+507
+In the following, we validate the convergence performance of the meta-
+508
+learner and the lower predictor in BCGAN. For simplicity, we employ the
+509
+SSGDA algorithm and conduct experiments on the circle fitting task, pre-
+510
+senting the training and validation losses. The step sizes of the upper and
+511
+lower models are set to be inversely proportional to the number of iterations.
+512
+Figure 7(a) shows that the upper-level optimization can reach conver-
+513
+gence, where LTotal := LX→Y + LY→X + λLc as well as its variance on the
+514
+25
+
+===== PAGE 27 =====
+10
+100
+150
+200
+250
+300
+ Iteration T
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+0.7
+0.8
+Total in Meta Set
+m1=1000
+m1=1500
+m1=2000
+(a) Validation loss
+10
+100
+150
+200
+250
+300
+Iteration T
+0.3
+0.4
+0.5
+0.6
+0.7
+0.8
+0.9
+Total in Test Set
+(b) Testing loss
+0
+50
+100
+150
+200
+250
+300
+Iteration T
+0.06
+0.08
+0.10
+0.12
+0.14
+0.16
+0.18
+0.20
+Generalization Gap
+(c) Generalization Gap
+Figure 8: Generalization validation in circle fitting task with varying sample size m1 and
+maximum iterations T.
+validation set quickly decrease and then stabilize within 50 iterations. More-
+515
+over, Figure 7(b) shows the lower-level convergence curves at the last outer
+516
+iteration, indicating that the proper masks have been assigned to the targets.
+517
+Figures 7(c)-7(e) verify that three loss counterparts on the training sets tend
+518
+to zero with the learned masks.
+519
+5.2.3. Validation on Algorithmic Generalization
+520
+Theorem 1 establishes that the generalization gap for the SSGDA al-
+521
+gorithm is governed by the validation sample size m1, the number of it-
+522
+erations T, and step-size configurations. Consistent with prior work (Ren
+523
+et al., 2018; Bao et al., 2021; Zhang et al., 2024), we assume the meta and
+524
+test distributions are identical, although they may diverge from the train-
+525
+ing distribution. We assess the generalization capability of the outer-level
+526
+algorithm, as defined in Eq.(11), by quantifying the discrepancy between
+527
+validation and test errors (Bao et al., 2021; Zhang et al., 2024). For sim-
+528
+plicity, we present empirical results for the circle fitting task using Algo-
+529
+rithm 1, with sample size m1 ∈[1000, 1500, 2000], and maximum iterations
+530
+T ∈[10, 100, 150, 200, 250, 300].
+531
+Moreover, the empirical findings reveal some interesting conclusions that
+532
+align with our theory and offer practical suggestions.
+533
+Impact of sample size m1. Figure 8 illustrates the performance of the
+534
+SSGDA algorithm under varying values of T and m1. Notably, the results
+535
+indicate that a larger meta set accelerates optimization convergence and en-
+536
+hances generalization, corroborating Theorem 1. Conversely, the algorithm
+537
+faces significant limitations under conditions of data scarcity. A limited sam-
+538
+ple size m1 may result in non-unique solutions and unstable outputs, con-
+539
+26
+
+===== PAGE 28 =====
+(a) Original Data with additive Gaussian noise
+(b) Denoised by MFCGAN
+(c) Denoised by BCGAN
+(d) Interpolated by MFCGAN
+(e) Interpolated by BCGAN
+Figure 9: Experiments on “L”-shape graphs corrupted by white noise and noisy output.
+(a) presents the graphs after different rotation angles, where two objects with red boxes
+are selected for interpolation. (b) and (c) show the recovered results on denoising. (d)
+and (e) state the interpolated graphs.
+sequently impairing generalization. Furthermore, as detailed in Theorem 2,
+540
+an insufficient number of samples can prevent the algorithm from converging
+541
+effectively, resulting in a significant excess risk.
+542
+Theoretical and empirical insights. The synthesis of theoretical anal-
+543
+ysis and empirical assessments provides insights into the generalization ca-
+544
+pabilities of the proposed BCGAN and a broader class of single-time scale
+545
+bilevel optimization algorithms. Specifically, its generalization performance
+546
+is often improved with an increase in the size of the meta set m1 and ju-
+547
+diciously chosen iteration counts T. Insufficient iterations may precipitate
+548
+underfitting, while an excess can incline towards overfitting. Typically, es-
+549
+tablishing appropriate learning rates is instrumental for generalization.
+550
+5.3. Manifold Denoising and Interpolating in Images
+551
+This subsection provides experimental results on image datasets (i.e., ro-
+552
+tated “L”-shape images, and the frames of Charlie Chaplin’s walking and
+553
+27
+
+===== PAGE 29 =====
+(a) Original Data
+(b) Recovered by MFCGAN
+(c) Recovered by BCGAN
+(d) Interpolated by MFCGAN
+(e) Interpolated by BCGAN
+Figure 10: Experiments on Charlie Chaplin’s frames with inputs corrupted by white noise
+and outputs involving noisy dimension following N(0, 100).
+(a) presents the bitmaps
+extracted from a GIF. Graphs with blue boxes are the test samples without adding white
+noise, whereas the two objects with red boxes are selected for interpolation. (b) and (c)
+show the generated new graphs in brown boxes when feeding unseen test set to bGX and
+bGY. (d) and (e) correspond to the interpolated observations.
+Chow Yun-Fat’ Clapping (Yao et al., 2024b)) to demonstrate the applicabil-
+554
+ity of our proposal for denoising and nonlinear interpolation.
+555
+Rotated “L” images.
+The first foundational image is generated in ac-
+556
+cordance with the density function of a Gaussian mixture model, which is
+557
+configured to simulate an “L”-shape graph. We rotated the image at inter-
+558
+vals of 10 degrees and replicated it 15 times by adding white noise N(0, 0.01),
+559
+resulting in a total of 540 images with the size of 32 × 32. The noisy graphs
+560
+under different rotation degrees are regarded as inputs (see Figure 9(a)).
+561
+Here, a new dimension Ynoise ∈N(0, 100) to y to validate the robustness
+562
+against label noise.
+563
+Figure 9(b) shows that the noisy channels or dimensions in the output
+564
+28
+
+===== PAGE 30 =====
+(a) Original Data
+(b) Recovered by BCGAN
+start
+end
+(c) Interpolated by BCGAN
+Figure 11: Experiments on Chow Yun-Fat’s Clapping frames with original inputs. (a)
+presents the bitmaps extracted from a GIF. Graphs with red boxes are selected for in-
+terpolation. (b) shows the denoised images recovered by BCGAN. (c) corresponds to the
+interpolated observations.
+degrade the fitting and alignment among the ambient and latent spaces for
+565
+MFCGAN. One can easily find that the rotation degrees of some images pro-
+566
+cessed by MFCGAN are inconsistent with the original ones. BCGAN can
+567
+effectively remove the noisy components in the inputs and outputs, while
+568
+retaining the original rotations as much as possible, as shown in Figure
+569
+9(c). Furthermore, the nonlinear interpolation is assessed by continuously
+570
+generating samples between the two selected graphs, highlighted by red
+571
+boxes, whose inputs are denoted by xi and xj. The next step is to com-
+572
+pute t bGX (xi) + (1 −t) bGX (xj) for different t, which are further fed into bGY
+573
+to generate a series of intermediate images. As shown in Figure 9(d), the
+574
+images generated by MFCGAN still keep distinct noisy pixels with incoher-
+575
+ent rotation angles and might arrange the images in a sequence that diverges
+576
+from their original rotation orders. Interestingly, during the interpolation
+577
+process, BCGAN generates some new graphs that can not be found in the
+578
+training set. Even under noisy scenarios, BCGAN is capable of simultane-
+579
+ously achieving efficient noise reduction and accurate nonlinear interpolation,
+580
+as shown in Figures 9(c) and 9(e).
+581
+Frames of Charlie Chaplin’s Walking. We conducted experiments on the
+582
+frames extracted from a short GIF of Charlie Chaplin. Here, 34 frames of
+583
+black and white graphs with the size of 160 × 160 are selected, where each
+584
+frame with an odd index is augmented by adding white noise N(0, 0.01) 20
+585
+29
+
+===== PAGE 31 =====
+(a) Noisy (left) and Recovered (right) Data with JPEG Compression Artifacts
+(b) Noisy (left) and Recovered (right) Data with Gamma Noise
+(c) Noisy (left) and Recovered (right) Data with Salt & Pepper Noise
+(d) Noisy (left) and Recovered (right) Data with White Noise
+Figure 12: Experiments on Chow Yun-Fat’s Clapping frames with various types of noisy
+inputs, and outputs involving noisy dimension following N(0, 100). (a)-(e) present cor-
+rupted inputs (in left panels) and the denoised results (in right panels) by BCGAN under
+the noise types of JPEG Compression Artifacts, Gamma Noise, Salt & Pepper Noise and
+White Noise, respectively.
+times. These odd-indexed frames are collected as the training set, while the
+586
+rest are left for testing. A slice of generated samples is shown in Figure 10(a),
+587
+where two training samples with red boxes are selected for interpolation, and
+588
+the testing set is highlighted with blue boxes.
+589
+To better evaluate the generalization performance of BCGAN, we feed
+590
+testing samples into bGX and bGY to generate corresponding manifold embed-
+591
+dings and new interpolated samples, respectively. Figures 10(b) and 10(c)
+592
+verify that BCGAN can generalize to unseen data, learn the mappings be-
+593
+tween two spaces, and assign the proper masks on the target variables. The
+594
+30
+
+===== PAGE 32 =====
+series of recovered samples produced by BCGAN is visually closer to the
+595
+original testing samples than those processed by MFCGAN. Moreover, the
+596
+interpolated images by BCGAN in Figure 10(e) demonstrate the coherent
+597
+movements in the limbs and the angles of the cane compared with MFC-
+598
+GAN.
+599
+Frames of Chow Yun-Fat’s Clapping.
+To assess the capability of im-
+600
+age denoising and interpolation, we conducted experiments on the frames of
+601
+Chow Yun-Fat’s clapping, extracting 280 gray frames (64 × 64) and using
+602
+12 for testing. As illustrated in Figure 11, BCGAN demonstrates superior
+603
+performance in both denoising and nonlinear interpolation. The model effec-
+604
+tively suppresses background noise and generates smooth transitions between
+605
+selected anchor frames, which indicates an accurate estimation of the under-
+606
+lying manifold geometry.
+607
+Furthermore, we validate the robustness of BCGAN by subjecting the
+608
+whole dataset to five distinct types of noise, including JPEG compression
+609
+artifacts, Gamma, Salt & Pepper, and White noise.
+As shown in Figure
+610
+12, BCGAN achieves high-fidelity image recovery across all types of corrup-
+611
+tion, successfully eliminating diverse noise artifacts while preserving critical
+612
+edge and moving details.
+These results confirm that the bilevel masking
+613
+mechanism successfully mitigates pixel-level input noise and noisy dimen-
+614
+sions in the output variables, thereby ensuring high-quality reconstruction
+615
+under complex data degradation.
+616
+6. Conclusion
+617
+This paper presents a new manifold fitting scheme called BCGAN, which
+618
+incorporates feature selection into a probabilistic bilevel optimization frame-
+619
+work. Compared with the existing works, the proposed approach is capable of
+620
+realizing dimensional reduction, robust image recovery, and nonlinear inter-
+621
+polation simultaneously. Theoretical guarantees are presented for its general-
+622
+ization bounds, and empirical evaluations are stated to verify its superiority
+623
+over the related state-of-the-art models.
+624
+Acknowledgments
+625
+The work is supported in part by the National Natural Science Foundation
+626
+of China (Grant Nos 62376104 and 12426512).
+627
+31
+
+===== PAGE 33 =====
+References
+628
+Antoine, J.P., Ro¸sca, D., Vandergheynst, P., 2010. Wavelet transform on
+629
+manifolds: old and new approaches. Applied and Computational Harmonic
+630
+Analysis 28, 189–202.
+631
+Bao, F., Wu, G., Li, C., Zhu, J., Zhang, B., 2021. Stability and generalization
+632
+of bilevel programming in hyperparameter optimization, in: Advances in
+633
+Neural Information Processing Systems, pp. 4529–4541.
+634
+Borsos, Z., Mutny, M., Krause, A., 2020. Coresets via bilevel optimization
+635
+for continual learning and streaming.
+Advances in Neural Information
+636
+Processing Systems 33, 14879–14890.
+637
+Chakraborty, R., Bouza, J., Manton, J.H., Vemuri, B.C., 2020. Manifoldnet:
+638
+A deep neural network for manifold-valued data with applications. IEEE
+639
+Transactions on Pattern Analysis and Machine Intelligence 44, 799–810.
+640
+Coifman, R.R., Lafon, S., 2006. Diffusion maps. Applied and computational
+641
+harmonic analysis 21, 5–30.
+642
+Deutsch, S., Ortega, A., Medioni, G., 2016. Manifold denoising based on spec-
+643
+tral graph wavelets. IEEE International Conference on Acoustics, Speech
+644
+and Signal Processing , 4673–4677.
+645
+Dinh, L., Sohl-Dickstein, J., Bengio, S., 2017. Density estimation using real
+646
+nvp, in: International Conference on Learning Representations.
+647
+Farnia, F., Ozdaglar, A., 2021. Train simultaneously, generalize better: Sta-
+648
+bility of gradient-based minimax learners, in: International Conference on
+649
+Machine Learning, pp. 3174–3185.
+650
+Fefferman, C., Ivanov, S., Kurylev, Y., Lassas, M., Narayanan, H., 2018.
+651
+Fitting a putative manifold to noisy data, in: Conference On Learning
+652
+Theory, pp. 688–720.
+653
+Fefferman, C., Ivanov, S., Kurylev, Y., Lassas, M., Narayanan, H., 2020.
+654
+Reconstruction and interpolation of manifolds. i: The geometric whitney
+655
+problem. Foundations of Computational Mathematics 20, 1035–1133.
+656
+32
+
+===== PAGE 34 =====
+Franceschi, L., Frasconi, P., Salzo, S., Grazzi, R., Pontil, M., 2018. Bilevel
+657
+programming for hyperparameter optimization and meta-learning, in: In-
+658
+ternational Conference on Machine Learning, pp. 1568–1577.
+659
+Germain, M., Gregor, K., Murray, I., Larochelle, H., 2015. Made: Masked
+660
+autoencoder for distribution estimation. International Conference on Ma-
+661
+chine Learning , 881–889.
+662
+Gong, X., Hao, J., Liu, M., 2024. An accelerated algorithm for stochastic
+663
+bilevel optimization under unbounded smoothness. Advances in Neural
+664
+Information Processing Systems 37, 78201–78243.
+665
+Gregory, K., Mammen, E., Wahl, M., 2021. Statistical inference in sparse
+666
+high-dimensional additive models. The Annals of Statistics 49, 1514–1536.
+667
+Hao, J., Ji, K., Liu, M., 2024. Bilevel coreset selection in continual learn-
+668
+ing: A new formulation and algorithm. Advances in Neural Information
+669
+Processing Systems .
+670
+Hardt, M., Recht, B., Singer, Y., 2016. Train faster, generalize better: Stabil-
+671
+ity of stochastic gradient descent, in: International Conference on Machine
+672
+Learning, pp. 1225–1234.
+673
+Harris, P., Brunsdon, C., Charlton, M., 2011. Geographically weighted prin-
+674
+cipal components analysis. International Journal of Geographical Informa-
+675
+tion Science 25, 1717–1736.
+676
+Hastie, T., Stuetzle, W., 1989. Principal curves. Journal of the American
+677
+statistical association 84, 502–516.
+678
+He, K., Chen, X., Xie, S., Li, Y., Doll´ar, P., Girshick, R., 2022. Masked au-
+679
+toencoders are scalable vision learners, in: Proceedings of the IEEE/CVF
+680
+conference on computer vision and pattern recognition, pp. 16000–16009.
+681
+Hein, M., Maier, M., 2006. Manifold denoising. Advances in Neural Infor-
+682
+mation Processing Systems .
+683
+Huang, Z., Wu, J., Van Gool, L., 2019. Manifold-valued image generation
+684
+with wasserstein generative adversarial nets, in: Proceedings of the AAAI
+685
+Conference on Artificial Intelligence, pp. 3886–3893.
+686
+33
+
+===== PAGE 35 =====
+Ji, K., Yang, J., Liang, Y., 2021. Bilevel optimization: Convergence analysis
+687
+and enhanced design. International conference on machine learning , 4882–
+688
+4892.
+689
+Lei, Y., Yang, Z., Yang, T., Ying, Y., 2021. Stability and generalization
+690
+of stochastic gradient methods for minimax problems, in: International
+691
+Conference on Machine Learning, pp. 6175–6186.
+692
+Lei, Y., Ying, Y., 2020. Fine-grained analysis of stability and generalization
+693
+for stochastic gradient descent, in: International Conference on Machine
+694
+Learning, pp. 5809–5819.
+695
+Liu, B., Ye, M., Wright, S., Stone, P., Liu, Q., 2022. Bome! bilevel opti-
+696
+mization made easy: A simple first-order approach. Advances in Neural
+697
+Information Processing Systems , 17248–17262.
+698
+Liu, Q., Xu, J., Jiang, R., Wong, W.H., 2021.
+Density estimation using
+699
+deep generative neural networks. Proceedings of the National Academy of
+700
+Sciences 118, e2101344118.
+701
+Luo, S., Hu, W., 2020. Differentiable manifold reconstruction for point cloud
+702
+denoising, in: Proceedings of the 28th ACM International Conference on
+703
+Multimedia, pp. 1330–1338.
+704
+Ma, C., Zhao, B., Chen, C., Rudin, C., 2023. This looks like those: Illu-
+705
+minating prototypical concepts using multiple visualizations. Advances in
+706
+Neural Information Processing Systems 36, 39212–39235.
+707
+Meil˘a, M., Zhang, H., 2023. Manifold learning: what, how, and why. Annual
+708
+Review of Statistics and Its Application 11, 39–417.
+709
+Miolane, N., Holmes, S., 2020. Learning weighted submanifolds with vari-
+710
+ational autoencoders and riemannian variational autoencoders, in: Pro-
+711
+ceedings of the IEEE/CVF conference on computer vision and pattern
+712
+recognition, pp. 14503–14511.
+713
+Mohammed, K., Narayanan, H., 2017. Manifold learning using kernel den-
+714
+sity estimation and local principal components analysis. arXiv preprint
+715
+arXiv:1709.03615 .
+716
+34
+
+===== PAGE 36 =====
+Ozdaglar, A., Pattathil, S., Zhang, J., Zhang, K., 2022. What is a good
+717
+metric to study generalization of minimax learners? Advances in Neural
+718
+Information Processing Systems 35, 38190–38203.
+719
+Pan, X., Li, X., Liu, J., Sun, T., Sun, K., Chen, L., Qu, Z., 2024. Stabil-
+720
+ity and generalization for stochastic recursive momentum-based algorithms
+721
+for (Strongly-)Convex one to k-level stochastic optimizations, in: Interna-
+722
+tional Conference on Machine Learning, pp. 39201–39275.
+723
+Papaioannou, P.G., Talmon, R., Kevrekidis, I.G., Siettos, C., 2022. Time-
+724
+series forecasting using manifold learning, radial basis function interpola-
+725
+tion, and geometric harmonics. Chaos: An Interdisciplinary Journal of
+726
+Nonlinear Science 32, 083113.
+727
+Papamakarios, G., Pavlakou, T., Murray, I., 2017. Masked autoregressive
+728
+flow for density estimation. Advances in Neural Information Processing
+729
+Systems 30, 2335–2344.
+730
+Pedregosa, F., 2016. Hyperparameter optimization with approximate gradi-
+731
+ent, in: International Conference on Machine Learning, pp. 737–746.
+732
+Ren, M., Zeng, W., Yang, B., Urtasun, R., 2018. Learning to reweight ex-
+733
+amples for robust deep learning, in: International Conference on Machine
+734
+Learning, pp. 4334–4343.
+735
+Sch¨olkopf, B., Smola, A., M¨uller, K.R., 1998. Nonlinear component analysis
+736
+as a kernel eigenvalue problem. Neural computation 10, 1299–1319.
+737
+Shu, J., Meng, D., Xu, Z., 2023. Learning an explicit hyper-parameter predic-
+738
+tion function conditioned on tasks. Journal of Machine Learning Research
+739
+24, 8818–8891.
+740
+Sober, B., Levin, D., 2020. Manifold approximation by moving least-squares
+741
+projection (mmls). Constructive Approximation 52, 433–478.
+742
+Tenenbaum, J.B., Silva, V.d., Langford, J.C., 2000.
+A global geometric
+743
+framework for nonlinear dimensionality reduction. science 290, 2319–2323.
+744
+Vincent, P., Larochelle, H., Bengio, Y., Manzagol, P.A., 2008. Extracting and
+745
+composing robust features with denoising autoencoders, in: International
+746
+Conference on Machine Learning, pp. 1096–1103.
+747
+35
+
+===== PAGE 37 =====
+Wang, W., Carreira-Perpin´an, M.A., 2010. Manifold blurring mean shift al-
+748
+gorithms for manifold denoising, in: 2010 IEEE Computer Society Confer-
+749
+ence on Computer Vision and Pattern Recognition, IEEE. pp. 1759–1766.
+750
+Yao, Z., Li, B., Lu, Y., Yau, S.T., 2024a. Single-cell analysis via manifold
+751
+fitting: A framework for rna clustering and beyond. Proceedings of the
+752
+National Academy of Sciences 121, e2400002121.
+753
+Yao, Z., Su, J., Li, B., 2023. Manifold fitting: An invitation to statistics.
+754
+arXiv preprint arXiv:2304.07680 .
+755
+Yao, Z., Su, J., Yau, S.T., 2024b. Manifold fitting with cyclegan. Proceedings
+756
+of the National Academy of Sciences 121, e2311436121.
+757
+Yao, Z., Xia, Y., 2019.
+Manifold fitting under unbounded noise.
+arXiv
+758
+preprint arXiv:1909.10228 .
+759
+Yau, S.T., 2008. A survey of calabi-yau manifolds. Surveys in differential
+760
+geometry 13, 277–318.
+761
+Zhang, X., Chen, H., Gu, B., Gong, T., Zheng, F., 2024.
+Fine-grained
+762
+analysis of stability and generalization for stochastic bilevel optimization,
+763
+in: Proceedings of the Thirty-Third International Joint Conference on
+764
+Artificial Intelligence, pp. 5508–5516.
+765
+Zhao, Q., Shu, J., Yuan, X., Liu, Z., Meng, D., 2023. A probabilistic formu-
+766
+lation for meta-weight-net. IEEE Transactions on Neural Networks and
+767
+Learning Systems 34, 1194–1208.
+768
+Zhen, X., Chakraborty, R., Yang, L., Singh, V., 2021. Flow-based generative
+769
+models for learning manifold to manifold mappings, in: Proceedings of the
+770
+AAAI Conference on Artificial Intelligence, pp. 11042–11052.
+771
+Zhou, X., Pi, R., Zhang, W., Lin, Y., Chen, Z., Zhang, T., 2022. Probabilistic
+772
+bilevel coreset selection, in: International Conference on Machine Learning,
+773
+pp. 27287–27302.
+774
+Zhu, J.Y., Park, T., Isola, P., Efros, A.A., 2017. Unpaired image-to-image
+775
+translation using cycle-consistent adversarial networks, in: Proceedings of
+776
+the IEEE International Conference on Computer Vision, pp. 2223–2232.
+777
+36
+
+===== PAGE 38 =====
+Supplementary Materials
+778
+Appendix A. Some Notations
+779
+Some used notations are summarized in Table A.1.
+780
+Table A.1: Main notations
+Notations
+Descriptions
+d0
+the dimension in ambient space
+d, d′
+the instinct dimension and empirical selected dimension in latent space
+m1, m2
+the sample size of the validation set and training set respectively
+zi, ˜zi
+the normal and corrupted validation samples respectively
+GX, GY, FM, DX, DY
+modules of generators, manifold fitting module and discriminators
+m, s
+the learned mask and its probability
+θ1
+parameters of modules FM, DX, DY
+θ2
+parameters of modules GX, GY
+θ
+the whole parameter of the BCGAN model where θ = (θ2, θ1)
+D1, D2
+the distributions of validation and training sets respectively
+Dmeta
+the validation set with the sizes of m1
+Dtrain
+the training set with the sizes of m2
+A(Dmeta, Dtrain)
+stochastic bilevel algorithm with training set Dtrain and validation set Dmeta
+R (A (Dmeta, Dtrain))
+the expected population risk at outer-level problem (on validation distribution D1)
+RDmeta (A (Dmeta, Dtrain))
+the upper empirical risk function (on validation set Dmeta)
+ℓ
+the objective function shared for outer-level and inner-level problems
+T
+the number of total iterations
+GS, G′
+S
+Update rules for SSGDA algorithm with normal or corrupted sample
+η, γ1, γ2
+the step sizes for updating s, θ1 and θ2, respectively
+Appendix B. Proof of Theorem 1
+781
+To better illustrate the proof process, we summarize the major steps and
+782
+lemmas in Figure B.1. Before providing the detailed proof, we first introduce
+783
+some necessary definitions and lemmas.
+784
+Definition 1. (On-average Argument Stability (Lei and Ying, 2020)). Let
+785
+Dmeta = {z1, . . . , zm1} and eDmeta = {˜z1, . . . , ˜zm1} be two sets drawn inde-
+786
+pendently from the distribution Dm1
+1 . For any i = 1, . . . , m1, define D(i)
+meta =
+787
+{z1, . . . , zi−1, ˜zi, zi+1, . . . , zm1} with at most one different sample w.r.t. Dmeta.
+788
+Denote the operator E as the expectation of EDmeta,Dtrain, e
+Dtrain,A. We say a
+789
+randomized algorithm A is β on-average argument stable if
+790
+E
+"
+1
+m1
+m1
+X
+i=1
+
+
+
+A(Dmeta, Dtrain) −A
+
+D(i)
+meta, Dtrain
+
+
+
+
+2
+#
+≤β.
+37
+
+===== PAGE 39 =====
+Stability Bounds
+Connection between 
+Stability & Generalization
+Generalization 
+Bounds
+Proper 
+Stepsizes
+Lemma 3
+Lemma 2
+Expansivity Analysis
+Proposition 1
+Lemma 1 
+Theorem 1
+Figure B.1: Proof sketch for Theorem 1.
+Remark 7. The on-average argument stability measures the average sensi-
+791
+tivity of output parameters of learning models when at most one validation
+792
+sample is changed. Definition 1 is different from Definition 1 in (Bao et al.,
+793
+2021), where the uniform stability is evaluated by the drift of prediction error
+794
+of the hyperparameter optimization algorithm and the boundedness of the loss
+795
+function is often required.
+796
+Lemma 1. Assume algorithm A is β on-average argument stable in expecta-
+797
+tion and the objective function ℓis l-Lipschitz continuous w.r.t. (s, θ1, θ2) ∈
+798
+Cs × Θ1 × Θ2, and z ∼D1. Denote E as EA,Dmeta,Dtrain. There holds
+799
+|E [R (A (Dmeta, Dtrain)) −RDmeta (A (Dmeta, Dtrain))] | ≤lβ.
+Proof. Algorithm A
+
+D(i)
+meta, Dtrain
+
+is independent of zi. For simplicity, let
+800
+E be EA,zi∈Dmeta,z∼D1. Since z and zi are drawn from the same distribution
+801
+and due to the symmetry, we have
+802
+EA [R (A (Dmeta, Dtrain) , D1) −RDmeta (A (Dmeta, Dtrain) , Dmeta)]
+=E [ℓ(A (Dmeta, Dtrain) , z) −ℓ(A (Dmeta, Dtrain) , zi)]
+=E
+h
+ℓ
+
+A
+
+D(i)
+meta, Dtrain
+
+, zi
+
+−ℓ(A (Dmeta, Dtrain) , zi)
+i
+=E
+"
+1
+m1
+m1
+X
+i=1
+
+ℓ
+
+A
+
+D(i)
+meta, Dtrain
+
+; zi
+
+−ℓ(A(Dmeta, Dtrain); zi)
+#
+≤E
+"
+l
+m1
+m1
+X
+i=1
+
+
+
+A
+
+D(i)
+meta, Dtrain
+
+−A(Dmeta, Dtrain)
+
+
+
+
+2
+#
+≤lβ,
+where the last inequality follows from the l-Lipschitz assumption and the
+803
+definition of on-average argument stability.
+804
+38
+
+===== PAGE 40 =====
+B.1 Update Rules
+805
+Denote GS as the update rules for the SSGDA algorithm and set its
+806
+maximum iteration number as T. For simplicity, the expectation E denotes
+807
+the expectation on Dmeta throughout the proof when not specified.
+808
+Given step sizes η, γ1 and γ2, the update rules for single-timescale in t-th
+809
+iteration can be described as:
+810
+GS
+
+
+
+
+st
+θt
+1
+θt
+2
+
+
+
+:=
+
+
+PCs
+st −ηt∇sℓ(st, θt
+1, θt
+2; zi)
+
+θt
+1 −γt
+1∇θ1ℓ(st+1, θt
+1, θt
+2; zj)
+θt
+2 + γt
+2∇θ2ℓ(st+1, θt+1
+1
+, θt
+2; zj)
+
+,
+(B.1)
+where zi ∈Dmeta, zj ∈Dtrain, and PCs(·) is the projection operation from s
+811
+to Cs = {s : 0 ≤si ≤1, ∥s∥1 ≤C, i = 1, 2, · · · , p}. Thus, we can derive that
+812
+∥PCs(s)∥2 ≤∥s∥2.
+Denote st′, θ1
+t′ and θ2
+t′ as s(i), θ1
+(i) and θ2
+(i) at t-th iteration, which are
+813
+the parameters affected by GS with corrupted sample ˜z.
+814
+Lemma 2. (Expansivity when selecting z) Suppose that Assumptions 1 and 2
+815
+hold for the bilevel optimization problem. Consider two sequences of updates
+816
+G1
+S, . . . , Gt
+S and (G1
+S)′ , . . . , (Gt
+S)′ defined in (B.1) with initial points s0 =
+817
+s0′, θ0
+1 = θ0′
+1 , θ0
+2 = θ0′
+2 . Denote η′ = max{η, γ1, γ2}. With step sizes η, γ1, γ2,
+818
+GS satisfies
+819
+
+
+
+
+
+
+
+GS
+
+
+
+
+st
+θt
+1
+θt
+2
+
+
+
+−GS
+
+
+
+
+st′
+θ1
+t′
+θ2
+t′
+
+
+
+
+
+
+
+
+
+
+
+2
+≤
+1 + 3Lη′ + 3L2η′2 + L3η′3
+
+
+
+
+
+
+
+
+
+st −st′
+θt
+1 −θ1
+t′
+θt
+2 −θ2
+t′
+
+
+
+
+
+
+
+
+
+2
+.
+Proof. Considering the normal scenario with fixed sample, we ignore the
+820
+description of zi ∈Dmeta for updating s, and zj ∈Dtrain for updating θ1, θ2.
+821
+39
+
+===== PAGE 41 =====
+According to the L-smoothness properties, we have
+822
+
+
+
+
+
+
+
+GS
+
+
+
+
+st
+θt
+1
+θt
+2
+
+
+
+−GS
+
+
+
+
+st′
+θ1
+t′
+θ2
+t′
+
+
+
+
+
+
+
+
+
+
+
+2
+≤
+
+
+
+
+
+
+
+
+
+st −st′ −η
+∇sℓ(st, θt
+1, θt
+2) −∇sℓ(st′, θt′
+1, θt′
+2)
+
+θt
+1 −θ1
+t′ −γ1
+∇θ1ℓ(st+1, θt
+1, θt
+2) −∇θ1ℓ(st+1′, θt′
+1, θt′
+2)
+
+θt
+2 −θ2
+t′ + γ2
+∇θ2ℓ(st+1, θt+1
+1
+, θt
+2) −∇θ2ℓ(st+1′, θt+1′
+1
+, θt′
+2)
+
+
+
+
+
+
+
+
+
+
+2
+≤
+
+
+
+
+
+
+
+
+
+st −st′
+θt
+1 −θ1
+t′
+θt
+2 −θ2
+t′
+
+
+
+
+
+
+
+
+
+2
++
+
+
+
+
+
+
+
+
+
+η
+∇sℓ(st, θt
+1, θt
+2) −∇sℓ(st′, θt′
+1, θt′
+2)
+
+γ1
+∇θ1ℓ(st+1, θt
+1, θt
+2) −∇θ1ℓ(st+1′, θt′
+1, θt′
+2)
+
+γ2
+∇θ2ℓ(st+1, θt+1
+1
+, θt
+2) −∇θ2ℓ(st+1′, θt+1′
+1
+, θt′
+2)
+
+
+
+
+
+
+
+
+
+
+2
+≤(1 + Lη)
+
+
+
+
+
+
+
+
+
+st −st′
+θt
+1 −θ1
+t′
+θt
+2 −θ2
+t′
+
+
+
+
+
+
+
+
+
+2
++ Lγ1
+
+
+
+
+
+
+
+
+
+st+1 −st+1′
+θt
+1 −θ1
+t′
+θt
+2 −θ2
+t′
+
+
+
+
+
+
+
+
+
+2
++ Lγ2
+
+
+
+
+
+
+
+
+
+st+1 −st+1′
+θt+1
+1
+−θ1
+t+1′
+θt
+2 −θ2
+t′
+
+
+
+
+
+
+
+
+
+2
+.
+Moreover,
+823
+
+
+
+
+
+
+
+
+
+st+1 −st+1′
+θt
+1 −θ1
+t′
+θt
+2 −θ2
+t′
+
+
+
+
+
+
+
+
+
+2
+≤
+
+
+
+
+
+
+
+
+
+st −s′
+θt
+1 −θ1
+t′
+θt
+2 −θ2
+t′
+
+
+
+
+
+
+
+
+
+2
++ η
+
+
+∇sℓ(st, θt
+1, θt
+2) −∇sℓ(st′, θt′
+1, θt′
+2)
+
+
+
+2
+≤(1 + Lη)
+
+
+
+
+
+
+
+
+
+st −s′
+θt
+1 −θ1
+t′
+θt
+2 −θ2
+t′
+
+
+
+
+
+
+
+
+
+2
+,
+and
+824
+
+
+
+
+
+
+
+
+
+st+1 −st+1′
+θt+1
+1
+−θ1
+t+1′
+θt
+2 −θ2
+t′
+
+
+
+
+
+
+
+
+
+2
+≤
+
+
+
+
+
+
+
+
+
+st −s′ −η
+∇sℓ(st, θt
+1, θt
+2) −∇sℓ(st′, θt′
+1, θt′
+2)
+
+θt
+1 −θ1
+t′ −γ1
+∇θ1ℓ(st+1, θt
+1, θt
+2) −∇sℓ(st+1′, θt′
+1, θt′
+2)
+
+θt
+2 −θ2
+t′
+
+
+
+
+
+
+
+
+
+2
+≤(1 + Lη)
+
+
+
+
+
+
+
+
+
+st −s′
+θt
+1 −θ1
+t′
+θt
+2 −θ2
+t′
+
+
+
+
+
+
+
+
+
+2
++ Lγ1
+
+
+
+
+
+
+
+
+
+st+1 −st+1′
+θt
+1 −θ1
+t′
+θt
+2 −θ2
+t′
+
+
+
+
+
+
+
+
+
+2
+.
+The desired results follow by combining the above inequalities.
+825
+Lemma 3. (Expansivity when selecting ˜z) Consider two sequences of updates
+826
+G1
+S, . . . , Gt
+S and (G1
+S)′ , . . . , (Gt
+S)′ defined in (B.1) with initial points s0 =
+827
+s0′, θ0
+1 = θ0′
+1 , θ0
+2 = θ0′
+2 . Define δt =
+q
+∥st −st′∥2
+2 +
+
+
+θ1
+t −θ1
+t′
+
+2
+2 +
+
+
+θ2
+t −θ2
+t′
+
+2
+2.
+828
+40
+
+===== PAGE 42 =====
+When selecting ˜zi, Gt
+S̸ = (Gt
+S)′. Then there holds
+829
+δt+1 ≤min
+
+
+
+
+
+
+
+
+
+
+GS
+
+
+
+
+st
+θt
+1
+θt
+2
+
+
+
+−GS
+
+
+
+
+st′
+θ1
+t′
+θ2
+t′
+
+
+
+
+
+
+
+
+
+
+
+2
+, δt
+
+
+
++
+q
+η2∥∇sℓ(st, θt
+1, θt
+2)∥2 + γ2
+1∥∇θ1ℓ(st+1, θt
+1, θt
+2)∥2 + γ2
+2∥∇θ2ℓ(st+1, θt+1
+1
+, θt
+2)∥2
++
+q
+η2∥∇sℓ(st′, θt′
+1, θt′
+2)∥2 + γ2
+1∥∇θ1ℓ(st+1′, θt′
+1, θt′
+2)∥2 + γ2
+2∥∇θ2ℓ(st+1′, θt+1′
+1
+, θt′
+2)∥2.
+Proof. Note that the samples used in GS and G′
+S are not consistent in this
+830
+case. Observe that
+831
+δt+1 =
+
+
+
+
+
+
+
+GS
+
+
+
+
+st
+θt
+1
+θt
+2
+
+
+
+−G′
+S
+
+
+
+
+st′
+θ1
+t′
+θ2
+t′
+
+
+
+
+
+
+
+
+
+
+
+2
+≤δt +
+
+
+
+
+
+
+
+
+
+η
+∇sℓ(st, θt
+1, θt
+2) −∇sℓ(st′, θt′
+1, θt′
+2)
+
+γ1
+∇θ1ℓ(st+1, θt
+1, θt
+2) −∇θ1ℓ(st+1′, θt′
+1, θt′
+2)
+
+γ2
+∇θ2ℓ(st+1, θt+1
+1
+, θt
+2) −∇θ2ℓ(st+1′, θt+1′
+1
+, θt′
+2)
+
+
+
+
+
+
+
+
+
+
+2
+≤δt +
+
+
+
+
+
+
+
+
+
+η∇sℓ(st, θt
+1, θt
+2)
+γ1∇θ1ℓ(st+1, θt
+1, θt
+2)
+γ2∇θ2ℓ(st+1, θt+1
+1
+, θt
+2)
+
+
+
+
+
+
+
+
+
+2
++
+
+
+
+
+
+
+
+
+
+η∇sℓ(st′, θt′
+1, θt′
+2)
+γ1∇θ1ℓ(st+1′, θt′
+1, θt′
+2)
+γ2∇θ2ℓ(st+1′, θt+1′
+1
+, θt′
+2)
+
+
+
+
+
+
+
+
+
+2
+≤δt +
+q
+η2∥∇sℓ(st, θt
+1, θt
+2)∥2 + γ2
+1∥∇θ1ℓ(st+1, θt
+1, θt
+2)∥2 + γ2
+2∥∇θ2ℓ(st+1, θt+1
+1
+, θt
+2)∥2
++
+q
+η2∥∇sℓ(st′, θt′
+1, θt′
+2)∥2 + γ2
+1∥∇θ1ℓ(st+1′, θt′
+1, θt′
+2)∥2 + γ2
+2∥∇θ2ℓ(st+1′, θt+1′
+1
+, θt′
+2)∥2.
+Meanwhile,
+832
+δt+1
+=
+
+
+
+
+
+
+
+GS
+
+
+
+
+st
+θt
+1
+θt
+2
+
+
+
+−G′
+S
+
+
+
+
+st′
+θ1
+t′
+θ2
+t′
+
+
+
+
+
+
+
+
+
+
+
+2
+≤
+
+
+
+
+
+
+
+GS
+
+
+
+
+st
+θt
+1
+θt
+2
+
+
+
+−GS
+
+
+
+
+st′
+θ1
+t′
+θ2
+t′
+
+
+
+
+
+
+
+
+
+
+
+2
++
+
+
+
+
+
+
+
+
+
+st′
+θ1
+t′
+θ2
+t′
+
+−GS
+
+
+
+
+st′
+θ1
+t′
+θ2
+t′
+
+
+
+
+
+
+
+
+
+
+
+2
++
+
+
+
+
+
+
+
+
+
+st′
+θ1
+t′
+θ2
+t′
+
+−G′
+S
+
+
+
+
+st′
+θ1
+t′
+θ2
+t′
+
+
+
+
+
+
+
+
+
+
+
+2
+≤
+
+
+
+
+
+
+
+GS
+
+
+
+
+st
+θt
+1
+θt
+2
+
+
+
+−GS
+
+
+
+
+st′
+θ1
+t′
+θ2
+t′
+
+
+
+
+
+
+
+
+
+
+
+2
++
+q
+η2∥∇sℓ(st, θt
+1, θt
+2)∥2 + γ2
+1∥∇θ1ℓ(st+1, θt
+1, θt
+2)∥2 + γ2
+2∥∇θ2ℓ(st+1, θt+1
+1
+, θt
+2)∥2
++
+q
+η2∥∇sℓ(st′, θt′
+1, θt′
+2)∥2 + γ2
+1∥∇θ1ℓ(st+1′, θt′
+1, θt′
+2)∥2 + γ2
+2∥∇θ2ℓ(st+1′, θt+1′
+1
+, θt′
+2)∥2.
+Combining the above results completes the proof.
+833
+41
+
+===== PAGE 43 =====
+Proposition 1. Let Assumptions 1, 2 be satisfied and let A be the SS-
+834
+GDA algorithm with T iterations. Denote the non-increasing step sizes by
+835
+ηt′ = max{ηt, γt
+1, γt
+2} and ηt′ ≤c1/(tL) ≤1, where t ∈[1, 2, · · · , T] and the
+836
+constant 0 < c1 ≤1. Then algorithm A is β on-average argument-stable in
+837
+expectation with
+838
+β = 2c1
+Lm1
+q
+∥∇sℓ(sT, θT
+1 , θT
+2 )∥2 + ∥∇θ1ℓ(sT+1, θT
+1 , θT
+2 )∥2 + ∥∇θ2ℓ(sT+1, θT+1
+1
+, θT
+2 )∥2
++ 2c1
+Lm1
+T
+X
+t=0
+( T
+t + 1)7c1
+q
+∥∇sℓ(st, θt
+1, θt
+2)∥2 + ∥∇θ1ℓ(st+1, θt
+1, θt
+2)∥2 + ∥∇θ2ℓ(st+1, θt+1
+1
+, θt
+2)∥2.
+Proof. Observe that the probability of selecting the normal sample (zi) from
+839
+D(i)
+meta reaches 1 −1/m1 and 1/m1 for the corrupted sample (˜zi). The update
+840
+rules (expansivity) of the SSGDA algorithm for different cases are summa-
+841
+rized in Lemmas 2 and 3. As Lηt′ ≤c1/t ≤1, we can derive
+842
+E[(δ(i)
+t+1)]
+≤(1 −1
+m1
+)
+1 + 3Lηt′ + 3L2(ηt′)2 + L3(ηt′)3
+EA[(δ(i)
+t )]
++ 1
+m1
+min{1 + 3Lηt′ + 3L2(ηt′)2 + L3(ηt′)3, 1}E[(δ(i)
+t )]
++ 1
+m1
+q
+(ηt)2∥∇sℓ(st, θt
+1, θt
+2)∥2 + (γt
+1)2∥∇θ1ℓ(st+1, θt
+1, θt
+2)∥2 + (γt
+2)2∥∇θ2ℓ(st+1, θt+1
+1
+, θt
+2)∥2
++ 1
+m1
+q
+(ηt)2∥∇sℓ(st′, θt′
+1, θt′
+2)∥2 + (γt
+1)2∥∇θ1ℓ(st+1′, θt′
+1, θt′
+2)∥2 + (γt
+2)2∥∇θ2ℓ(st+1′, θt+1′
+1
+, θt′
+2)∥2
+≤(1 + 7c1/t) EA[(δ(i)
+t )]
++ ηt′
+m1
+q
+∥∇sℓ(st, θt
+1, θt
+2)∥2 + ∥∇θ1ℓ(st+1, θt
+1, θt
+2)∥2 + ∥∇θ2ℓ(st+1, θt+1
+1
+, θt
+2)∥2
++ ηt′
+m1
+q
+∥∇sℓ(st′, θt′
+1, θt′
+2)∥2 + ∥∇θ1ℓ(st+1′, θt′
+1, θt′
+2)∥2 + ∥∇θ2ℓ(st+1′, θt+1′
+1
+, θt′
+2)∥2.
+Denote Ht = E[(δ(i)
+t )], At = (1 + 7c1/t) and
+843
+Bt = ηt′
+m1
+q
+∥∇sℓ(st, θt
+1, θt
+2)∥2 + ∥∇θ1ℓ(st+1, θt
+1, θt
+2)∥2 + ∥∇θ2ℓ(st+1, θt+1
+1
+, θt
+2)∥2
++ ηt′
+m1
+q
+∥∇sℓ(st′, θt′
+1, θt′
+2)∥2 + ∥∇θ1ℓ(st+1′, θt′
+1, θt′
+2)∥2 + ∥∇θ2ℓ(st+1′, θt+1′
+1
+, θt′
+2)∥2.
+42
+
+===== PAGE 44 =====
+Moreover,
+844
+HT+1 ≤BT + BT−1 · AT + BT−2 · AT−1 · AT + · · · + B0 ·
+TY
+j=1
+Aj + H0 ·
+TY
+v=0
+Av
+≤BT +
+T−1
+X
+t=0
+Bt ·
+TY
+j=t+1
+Aj + H0 ·
+TY
+v=0
+Av.
+Due to the initial settings s0 = s0′, θ1 = θ0′
+1 , θ2 = θ0′
+2 , there holds H0 =
+845
+E[(δ(i)
+0 )] = 0. It’s easy to verify that
+846
+TY
+j=t+1
+
+1 + 7c1
+j
+
+≤
+TY
+j=t+1
+
+exp
+7c1
+j
+
+≤exp
+ 
+T
+X
+j=t+1
+7c1
+j
+!
+≤exp(7c1 ln
+T
+t + 1) =
+ T
+t + 1
+7c1
+.
+Since zi and ˜zi follow the same distribution, we know that
+847
+EA,Dmeta,Dtrain
+q
+∥∇sℓ(st, θt
+1, θt
+2; zi)∥2 + ∥∇θ1ℓ(st+1, θt
+1, θt
+2; zj)∥2 + ∥∇θ2ℓ(st+1, θt+1
+1
+, θt
+2; zj)∥2
+
+=EA,D,Dmeta,Dtrain
+q
+∥∇sℓ(st′, θt′
+1, θt′
+2; ˜zi)∥2 + ∥∇θ1ℓ(st+1′, θt′
+1, θt′
+2; zj)∥2 + ∥∇θ2ℓ(st+1′, θt+1′
+1
+, θt′
+2; zj)∥2
+
+.
+Combining the above inequalities, we have
+848
+E[Bt] ≤
+2c1
+Lm1
+q
+∥∇sℓ(st, θt
+1, θt
+2)∥2 + ∥∇θ1ℓ(st+1, θt
+1, θt
+2)∥2 + ∥∇θ2ℓ(st+1, θt+1
+1
+, θt
+2)∥2,
+and E[ 1
+m1
+Pm1
+i=1 δ(i)
+T ] ≤E[BT] + PT−1
+t=0 ( T
+t+1)7c1E[Bt]. The desired conclusion
+849
+holds according to Definition 1.
+850
+B.2 Proof of Theorem 1
+851
+Based on Proposition 1 and the l-lipschitz continuity, we have
+852
+β ≤2
+√
+3l
+7Lm1
+ 
+1 +
+T
+X
+t=0
+T
+t + 1
+!
+≤O
+T ln(T)
+m1
+
+and
+853
+|E [R (A (Dmeta, Dtrain)) −RDmeta (A (Dmeta, Dtrain))] | ≤lβ ≤O
+T ln(T)
+m1
+
+as c1 = 1/7 and T > 1.
+854
+43
+
+===== PAGE 45 =====
+When c1̸ = 1/7, there exists an constant c > 0 (e.g., the Euler-Mascheroni
+855
+constant) such that
+856
+PT−1
+t=0 ( T
+t+1)7c1 ≤T 7c1 PT−1
+t=0 ( 1
+t+1)7c1 ≤T 7c1
+
+c +
+R T−1
+0
+( 1
+t+1)7c1dt
+
+≤T 7c1
+
+c + T 1−7c1−1
+1−7c1
+
+.
+Integrating the above estimations with Lemma 1, we get the desired re-
+857
+sult.
+858
+Appendix C. Proof of Theorem 2
+859
+Denote the step size η′ = ηt. Based on the update rules, there holds
+860
+∥st+1 −ˆs∥2
+2 ≤∥st −η′∇sℓ(st, θt
+1, θt
+2) −ˆs∥2
+2
+≤∥st −ˆs∥2
+2 + (η′)2∥∇sℓ(st, θt
+1, θt
+2)∥2
+2 −2η′⟨st −ˆs, ∇sℓ(st, θt
+1, θt
+2)⟩.
+With the convex property with respect to s, we have
+861
+E
+
+∥st+1 −ˆs∥2
+2
+
+≤E
+
+∥st −ˆs∥2
+2
+
++ (η′)2l2 + 2η′E
+
+ℓ(ˆs, θt
+1, θt
+2) −ℓ(st, θt
+1, θt
+2)
+
+.
+By rearranging the orders and summing up, we can derive that
+862
+2η′
+T
+X
+t=1
+E
+
+ℓ(st, θt
+1, θt
+2) −ℓ(ˆs, θt
+1, θt
+2)
+
+≤E
+
+∥s0 −ˆs∥2
+2 −∥sT+1 −ˆs∥2
+2
+
++ T(η′)2l2
+≤V + T(η′)2l2.
+Without loss of generality, there holds
+863
+E
+h
+RDmeta (A (Dmeta, Dtrain)) −ˆRDmeta (A (Dmeta, Dtrain))
+i
+≤O
+ V
+η′T + η′l2
+
+.
+Recalling Lemma 1 and Theorem 1 with constant 0 < c1 < 1/7, the
+864
+generalization gap could be derived with the order of O (T/m1). Moreover,
+865
+by selecting the number of iterations T ≍√m1 and the non-increasing step
+866
+sizes ηt′ = max{ηt, γt
+1, γt
+2} ≤min{ c
+√
+T , c1
+t } with constant c > 0, we can derive
+867
+that
+868
+E [R (A (Dmeta, Dtrain)) −R∗(A (Dmeta, Dtrain))] ≤O (1/√m1) .
+44
+
+===== PAGE 46 =====
+Appendix D. Projected Optimization in Algorithm 2
+869
+Inspired by existing works (Zhao et al., 2023; Zhou et al., 2022), we
+870
+present the computing procedure associated with Algorithm 2.
+871
+Given a ∈Rd, in order to project a to set C, we introduce the following
+872
+problem
+873
+min
+s∈Rd
+1
+2∥s −a∥2, s.t.1Ts ≤C and 0 ≤si ≤1,
+where 1 = (1, 1, · · · , 1) ∈Rd and s is the ideal output after projection.
+874
+The above minimization problem can be resolved by the commonly used
+875
+Lagrangian multiplier method, formulated with
+876
+L(s, b) =1
+2∥s −a∥2 + b
+1⊤s −C
+
+=1
+2∥s −(a −b1)∥2 + b
+1⊤a −C
+
+−n
+2b2,
+(D.1)
+where the auxiliary variable b ≥0 and 0 ≤si ≤1.
+877
+To minimize Eq.(D.1) with respect to s, we consider ˜s = 1a−b1≥1 + (a −
+878
+b1)1>a−b1>0. For b ≥0, we introduce two auxiliary functions
+879
+g(b) = L(˜s, b) = 1
+2 ∥[a −b1]−+ [a −(b + 1)1]+∥2 + b
+1⊤a −s
+
+−n
+2b2
+= 1
+2 ∥[a −b1]−∥2 + 1
+2 ∥[a −(b + 1)1]+∥2 + b
+1⊤a −s
+
+−n
+2b2,
+and
+880
+g′(b) =1⊤[b1 −a]+ + 1⊤[(b + 1)1 −a]−+
+1Ta −s
+
+−nb
+=1⊤min(1, max(0, a −b1)) −C.
+Based on the monotone decreasing property of g′(b), a bisection method
+881
+is exploited to solve the equation g′(b) = 0 with solution b∗. Because g(b)
+882
+increases in (−∞, b∗] and decreases in [b∗, +∞), we can conclude that the
+883
+maximum of g(b) is obtained at 0 if b∗≤0 and b∗if b∗> 0.
+884
+Finally, s∗= 1a−c∗1≥1 + (a −c∗1)1>a−c∗1>0 = min (1, max (0, a −c∗1))
+885
+follows by setting c∗= max (0, b∗).
+886
+Appendix E. Benchmarks, Baselines and Model Settings
+887
+E.1 Benchmarks
+888
+In this paper, 4 synthetic datasets and 2 image datasets are selected for
+889
+our experiments. Indeed, these datasets have been widely used for validat-
+890
+45
+
+===== PAGE 47 =====
+ing the performance of manifold fitting (Yao et al., 2024b, 2023) or sample
+891
+generation (Papamakarios et al., 2017; Liu et al., 2021).
+892
+(1) Circle, Involute and Torus datasets are generated by Eq.(12), (13)
+893
+and (14) respectively, where 400 training samples are generated. The corre-
+894
+sponding outputs are generated with each dimension uniformly distributed
+895
+within (0, 1). The corresponding noisy data is further corrupted by adding
+896
+noisy dimensions, following a N(0, 100) distribution.
+897
+(2) Calabi-Yau manifolds are a class of compact and complex K¨ahler
+898
+manifolds. They are highly significant because their geometric representation
+899
+aligns with the universe model of physicists (Yao et al., 2024b).
+900
+(3) “L” shape images are constructed using a Gaussian mixture model
+901
+with component means in an “L” shape. These components are then rotated
+902
+by 10◦. There are 36 images with 32×32 pixels, which are further replicated
+903
+15 times, with added white noise.
+904
+(4) Frames extracted from GIFs of Charlie Chaplin and Chow Yun-Fat.
+905
+For the former GIF, 34 frames of 160 × 160 black and white bitmaps are
+906
+extracted. Those odd-numbered frames with added white noise 20 times per
+907
+frame, and even-numbered frames remain unchanged as test sets.
+908
+In summary, our experimental design has covered a wide range of syn-
+909
+thetic and real-world noise scenarios:
+910
+• Synthetic Datasets (Circle, Involute, Torus, Calabi-Yau Manifold, “L”-
+911
+images). To better approximate the real-world noisy scenario, the ad-
+912
+ditive noise, noisy dimensions and the white noise are manually added
+913
+into the input vector or matrix. Moreover, the corruption of the noisy
+914
+dimension to the output is also considered.
+915
+• Realworld Image Datasets (Charlie Chaplin’s and Chow Yun-Fat’s Frames).
+916
+The real-world data naturally involves pixel noise and blur in images.
+917
+Furthermore, we also artificially add white noise into the input images
+918
+and noisy dimensions into the output embeddings.
+919
+E.2 Baselines
+920
+The following algorithms are selected as the empirical competitors for
+921
+manifold fitting tasks.
+922
+(1) RealNVP (the real-valued non-volume preserving transformation (Dinh
+923
+et al., 2017)) introduces a class of invertible functions, real-valued non-volume
+924
+46
+
+===== PAGE 48 =====
+preserving transformations, for unsupervised learning of probabilistic mod-
+925
+els. The algorithm utilizes coupling layers and a multi-scale architecture to
+926
+model high-dimensional data effectively.
+927
+(2) MADE (masked autoencoder for distribution estimation (Germain
+928
+et al., 2015)) applies the binary mask matrices applied to the weights of the
+929
+autoencoder, enforcing an autoregressive property where each input dimen-
+930
+sion is reconstructed based on preceding dimensions in a given order.
+931
+(3) MAF (masked autoregressive flow (Papamakarios et al., 2017)) lever-
+932
+ages the above MADE as a building block, enabling rapid evaluation and
+933
+training on parallel architectures.
+934
+(4) RoundTrip. Liu et al. (2021) adopts a flexible transformation built
+935
+by two GANs to map a known distribution onto a manifold.
+936
+(5) DAE (denoising autoencoder (Vincent et al., 2008)) introduces a train-
+937
+ing principle for autoencoders based on the concept of denoising, which learns
+938
+robust representations of input data invariant to minor, irrelevant changes.
+939
+(6) CycleGAN (Cycle-consistent GAN (Zhu et al., 2017)) learns a map-
+940
+ping between two domains without the need for paired training examples,
+941
+which employs the cycle consistent loss for coherent generalization.
+942
+(7) MFCGAN (Cycle-consistent GAN with manifold fitting module (Yao
+943
+et al., 2024b)) leverages the generative adversarial framework to learn smooth
+944
+mappings between a low-dimensional latent space and a high-dimensional
+945
+data space.
+946
+(8) MFS (Manifold Fitting based on Statistics (Yao et al., 2023)), utilizes
+947
+a unique two-step process for estimating the manifold, which involves iden-
+948
+tifying the contraction direction and evaluating the contracted point based
+949
+on local averaging techniques.
+950
+E.4 Model Settings
+951
+The optimization steps for the probabilistic BCGAN have already been
+952
+summarized in Algorithm 1.
+953
+Model Initialization.
+The lower model architecture defaults to the
+954
+MFCGAN for initialization. Regarding network topology, the input and out-
+955
+put channel dimensions are configured to 1 to accommodate grayscale imag-
+956
+ing data. The capacity of the networks is standardized by setting the number
+957
+of generator filters in the last convolutional layer and discriminator filters in
+958
+the first layer to 64. Specifically, the generator and primary discriminator
+959
+utilize a 9-layer Feed-Forward Network, while the secondary discriminator is
+960
+implemented using the classical and basic PatchGAN model. Furthermore,
+961
+47
+
+===== PAGE 49 =====
+network depth is regulated through hyperparameters, with the number of
+962
+discriminator layers set to 3 and the number of generator layers set to 9.
+963
+Module FM. The manifold fitting module FM involves three (Gaussian)
+964
+kernels, where the bandwidths are set to 0.05, 0.01, 0.05 as default following
+965
+(Yao et al., 2024b). Indeed, the detailed optimization process of FM has
+966
+been illustrated in the Appendix of (Yao et al., 2024b), which exhibits a
+967
+theoretical guarantee on its approximation capability (Yao et al., 2023).
+968
+Core Size Setting. As for setting C involved in the constraint Cs where
+969
+Cs = {s : 0 ≤si ≤1, ∥s∥1 ≤C, i = 1, 2, · · · , p} ,
+the ambient dimension D is employed here to initialize C = D as default.
+970
+For simplicity, we firstly select the optimal value ˆC from the searching range
+971
+of [D, ⌊D/2⌋, ⌊D/4⌋, · · · , 2, 1] at the first round, where ⌊a⌋stands for the
+972
+smallest integer that is not less than a.
+From our empirical validations,
+973
+BCGAN is capable of assigning proper masks with a slightly larger C.
+974
+Appendix F. Discussions and Limitations
+975
+F.1 Discussion on Bilevel Scheme
+976
+To address the challenge of noisy dimensions in manifold fitting, we draw
+977
+inspiration from bilevel optimization frameworks, which have been applied in
+978
+related domains such as feature selection and robust learning. Existing bilevel
+979
+methods often focus on tasks like coreset selection (Zhou et al., 2022; Hao
+980
+et al., 2024; Borsos et al., 2020) or hyperparameter optimization (Pedregosa,
+981
+2016; Ji et al., 2021), where the goal is to optimize a primary objective by
+982
+adjusting a set of hyperparameters (Franceschi et al., 2018). Motivated by
+983
+these studies, the binary masks are learned via a probabilistic bilevel scheme
+984
+in this work to remove noisy channels for robust manifold fitting. Theoretical
+985
+and empirical evaluations validate the competitiveness and robustness of our
+986
+bilevel manifold fitting scheme.
+987
+F.2 Comparisons and Limitations
+988
+This section presents a comparative analysis of our BCGAN against nu-
+989
+merical analysis-based manifold learning approaches, focusing on robustness,
+990
+interpretability, computational efficiency, and limitations.
+991
+Robustness to Noisy Dimensions. Prior numerical analysis-based meth-
+992
+ods (Hastie and Stuetzle, 1989; Tenenbaum et al., 2000; Coifman and Lafon,
+993
+48
+
+===== PAGE 50 =====
+2006) typically rely on distance metrics computed across the entire ambient
+994
+space, rendering them sensitive to redundant or noisy features that distort
+995
+geometric structures (Luo and Hu, 2020). In contrast, our BCGAN employs a
+996
+bilevel optimization strategy with a probabilistic masking mechanism. This
+997
+architecture automatically identifies and suppresses irrelevant dimensions,
+998
+thereby learning robust mappings that are insensitive to such corruptions.
+999
+Interpretability. While numerical analysis-based methods offer explicit
+1000
+geometric interpretability through basis functions, deep models are often
+1001
+viewed as “black boxes”. BCGAN mitigates this by providing feature-level
+1002
+transparency through the learned mask, which reveals which latent or am-
+1003
+bient dimensions are truly informative. Future work aims to further bridge
+1004
+the gap between deep learning and geometric transparency by integrating
+1005
+gradient-based attribution, interpretable additive models (Gregory et al.,
+1006
+2021), and prototype visualization (Ma et al., 2023).
+1007
+Parameterization and Intrinsic Dimensionality Assumptions. Unlike tra-
+1008
+ditional approaches that inherently discover the intrinsic dimensionality in
+1009
+an unsupervised manner (Tenenbaum et al., 2000; Papaioannou et al., 2022),
+1010
+neural networks like BCGAN typically require prior knowledge of parame-
+1011
+terization and hyperparameters. To alleviate this limitation, our method in-
+1012
+corporates a sparsity-inducing penalty on the masks, allowing practitioners
+1013
+to set the target dimension slightly larger than the estimated actual value.
+1014
+Noise Distribution Assumptions and Generalization. Theoretically, the
+1015
+manifold fitting module in BCGAN assumes Gaussian noise to provide strict
+1016
+guarantees in statistics (Yao et al., 2023, 2024b). However, real-world noise
+1017
+is often complex and non-Gaussian (Luo and Hu, 2020), and CycleGAN-like
+1018
+techniques may struggle with generalization on sparse data. Despite the the-
+1019
+oretical assumption, our experiments demonstrate that BCGAN maintains
+1020
+strong robustness across various noise distributions. We attribute this to
+1021
+the manifold fitting module and adversarial nature of the training process,
+1022
+which prioritizes learning the underlying geometric structure over fitting spe-
+1023
+cific noise parameters, ensuring effective generalization in sparse scenarios.
+1024
+In summary, the BCGAN framework effectively addresses the limitations
+1025
+of traditional methods in handling noise and computational load, while of-
+1026
+fering a unique perspective on model interpretability. These attributes col-
+1027
+lectively establish a robust and efficient pathway for manifold fitting.
+1028
+49
