@@ -1,12 +1,12 @@
 <div align="center">
 
-# 🌀 BCGAN：双层循环对抗网络的鲁棒流形拟合
+# 🌀 Bilevel manifold fitting
 
 <div>
 &nbsp;<a href="README.md">🇬🇧 English</a> | <a href="README_zh.md">🇨🇳 简体中文</a>
 </div>
 
-[![Paper](https://img.shields.io/badge/📄-论文-red)](BCGAN.pdf)
+[![Paper](https://img.shields.io/badge/📄-论文-red)](https://www.sciencedirect.com/science/article/abs/pii/S0893608026008828)
 [![License](https://img.shields.io/badge/⚡-MIT_License-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-green)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-1.10%2B-orange)](https://pytorch.org/)
@@ -130,7 +130,7 @@ BCGAN/
 ├── reinforce_utils/     # REINFORCE / 策略梯度工具
 ├── logging_utils/       # 目录管理、tensorboard 工具
 ├── tests/               # 单元与功能测试套件
-├── BCGAN.pdf            # 论文
+
 └── LICENSE              # MIT
 ```
 
@@ -153,11 +153,14 @@ BCGAN/
 如果 BCGAN 对您的研究有帮助，请考虑引用：
 
 ```bibtex
-@article{bcgan2025,
-  title   = {Bilevel Manifold Fitting},
-  author  = {BCGAN Authors},
-  year    = {2025},
-  url     = {https://github.com/zxlml/BCGAN}
+@article{zhang2026bilevel,
+  title   = {Bilevel manifold fitting},
+  author  = {Zhang, Xuelin and Chen, Hong and Shen, Li and Gu, Bin and Huang, Heng},
+  journal = {Neural Networks},
+  volume  = {205},
+  pages   = {109424},
+  year    = {2026},
+  publisher = {Elsevier}
 }
 ```
 
