@@ -602,6 +602,59 @@ class BCGANSSGDA:
 
 
 # ---------------------------------------------------------------------------
+# Deployment-stage retraining with a fixed hard mask
+# ---------------------------------------------------------------------------
+def finetune_lower(lower, X_train, Y_train, m, n_steps=6000, batch_size=512,
+                   lr=1e-3, betas=(0.5, 0.999), lr_min_frac=0.02,
+                   decay_from=0.5, log=0):
+    """Train a lower level with a FIXED hard mask under Adam and a
+    constant-then-cosine-decay schedule (the decaying step size is what lets
+    the reconstruction reach the high precision reported in the paper; a
+    plain constant-lr run plateaus at the noise floor).
+
+    Used for the deployment stage of run_synthetic.py: the bilevel loop
+    selects the mask, and the denoising model is then retrained from a FRESH
+    initialisation with that mask.  Continuing from the bilevel theta instead
+    empirically gets stuck in the bad generator basins left by the
+    alternating-mask bilevel phase (the discriminator dominates and the
+    generator collapses), which is the GAN analogue of why PBCS-style
+    pipelines retrain the final model on the selected support.
+    """
+    opt1 = torch.optim.Adam(lower.theta1_params(), lr=lr, betas=betas)
+    opt2 = torch.optim.Adam(lower.theta2_params(), lr=lr, betas=betas)
+    t_decay = max(1, int(decay_from * n_steps))
+    losses = []
+    for i in range(n_steps):
+        if i < t_decay:
+            f = 1.0
+        else:
+            f = lr_min_frac + (1.0 - lr_min_frac) * 0.5 * \
+                (1.0 + math.cos(math.pi * (i - t_decay) / max(1, n_steps - t_decay)))
+        for g in opt1.param_groups:
+            g['lr'] = lr * f
+        for g in opt2.param_groups:
+            g['lr'] = lr * f
+        idx = torch.randint(0, X_train.shape[0], (batch_size,))
+        x = X_train[idx].to(lower.device)
+        y = Y_train[idx].to(lower.device)
+        out = lower.forward_losses(x, y, m=m)
+        opt1.zero_grad(set_to_none=True)
+        loss1 = lower.theta1_loss(out)
+        loss1.backward()
+        opt1.step()
+        out = lower.forward_losses(x, y, m=m)
+        opt2.zero_grad(set_to_none=True)
+        loss2 = lower.theta2_loss(out)
+        loss2.backward()
+        opt2.step()
+        losses.append((float(loss1.item()), float(loss2.item())))
+        if log and (i % log == 0):
+            print(f"[finetune {i:4d}] theta1 {loss1.item():.4f} "
+                  f"theta2 {loss2.item():.4f}")
+    return losses
+
+
+# ---------------------------------------------------------------------------
 # Evaluation helpers: denoising (x_hat = G_Y∘G_X(m⊙x)) and sample generation
 # ---------------------------------------------------------------------------
 @torch.no_grad()

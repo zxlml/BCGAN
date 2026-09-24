@@ -72,7 +72,11 @@ def build_args():
     p.add_argument('--s_init', type=float, default=0.9)
     p.add_argument('--lr_schedule', type=str, default='inverse',
                    choices=['inverse', 'linear', 'const'])
-    p.add_argument('--finetune', type=int, default=6000)
+    p.add_argument('--finetune', type=int, default=12000)
+    p.add_argument('--fresh_finetune', type=int, default=1,
+                   help='1: retrain the lower level from a fresh init with the '
+                        'selected hard mask (recommended); 0: continue from the '
+                        'bilevel theta')
     p.add_argument('--seed', type=int, default=0)
     p.add_argument('--save', type=str, default='')
     p.add_argument('--plot', action='store_true')
@@ -146,7 +150,19 @@ def main():
           f'{solver.hard_mask().int().tolist()}')
 
     if args.finetune > 0:
-        solver.finetune_with_hard_mask(args.finetune, args.batch_size)
+        if args.fresh_finetune:
+            # deployment stage: retrain from a fresh initialisation with the
+            # bilevel-selected hard mask (see bcgan_core.finetune_lower)
+            m_hard = solver._mask(solver.hard_mask())
+            lower = bc.LowerMFCGAN(d0, d, Xt, sigma=args.sigma,
+                                   lambda_cycle=args.lambda_cycle,
+                                   mask_on=mask_on, device=device,
+                                   meta_d_weight=args.meta_d_weight)
+            bc.finetune_lower(lower, Xt, Yt, m_hard, n_steps=args.finetune,
+                              batch_size=args.batch_size, lr=args.gamma1,
+                              log=max(1, args.finetune // 12))
+        else:
+            solver.finetune_with_hard_mask(args.finetune, args.batch_size)
 
     # ---------------- evaluation (Tables 2-3 metrics) ----------------------
     m_hard = solver.hard_mask().to(device)
