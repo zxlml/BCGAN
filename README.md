@@ -59,25 +59,6 @@ single-time-scale gradient ascent–descent method.
    data generation, FM numerical robustness, gradient flow, REINFORCE unbiasedness,
    mask identification, and end-to-end bilevel smoke runs.
 
-## ⚙️ Main Results
-
-Synthetic benchmarks of the paper (Section 5.2, Eq.(12)–(14)): a noisy dimension
-`N(0,100)` is appended to the ambient input (circle, involute) or to the latent code
-(torus, corrupted output). The metric is the distance to the latent manifold
-(mean ± SD, 95% quantile, and the percentage of samples beyond 3σ, σ = 0.01).
-
-| Dataset | Corruption | Paper (BCGAN, Tables 2–3) |
-| :--- | :--- | :--- |
-| Circle   | none            | 7.21e-4 |
-| Circle   | input  (N(0,100)) | **7.49e-4** |
-| Involute | none            | 5.08e-3 |
-| Involute | input  (N(0,100)) | **5.17e-3** |
-| Torus    | none            | 6.37e-3 |
-| Torus    | output (N(0,100)) | **6.44e-3** |
-
-Note how the corrupted results barely degrade w.r.t. the clean ones — the learned mask
-filters the noisy dimension automatically (e.g. `m = [1,1,0]` for the 3-D corrupted circle).
-
 ## ⚡ Quick Start
 
 ### 1. Environment

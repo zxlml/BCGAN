@@ -1,4 +1,4 @@
-﻿# Byte-compiled / optimized / DLL files
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -181,9 +181,7 @@ cython_debug/
 .cursorindexingignore
 # Project artifacts
 checkpoints/
-results/**
+results/
 test_run.txt
 *.log
-!results/**/
-!results/**/*.csv
 BCGAN.pdf
